@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual env
+.venv/
+venv/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.coverage
+htmlcov/
+
+# IDE / tooling
+.idea/
+.vscode/
+.jbeval/
+
+# Alembic (keep migration scripts, ignore local sqlite artifacts if any)
+*.sqlite3
+
+# OS
+.DS_Store

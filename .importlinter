@@ -1,0 +1,54 @@
+[importlinter]
+root_package = app
+include_external_packages = True
+
+[importlinter:contract:db-only-in-repositories-and-models]
+name = SQLAlchemy imports confined to repositories/ (queries) and models/ (ORM definitions)
+type = forbidden
+source_modules =
+    app.api
+    app.services
+    app.schemas
+    app.providers
+    app.workers
+    app.core
+forbidden_modules =
+    sqlalchemy
+allow_indirect_imports = True
+
+[importlinter:contract:qdrant-only-in-repositories]
+name = Qdrant client imports confined to repositories/
+type = forbidden
+source_modules =
+    app.api
+    app.services
+    app.schemas
+    app.providers
+    app.workers
+    app.core
+    app.models
+forbidden_modules =
+    qdrant_client
+allow_indirect_imports = True
+
+# Extend forbidden_modules below when a concrete vendor SDK is chosen and isn't listed yet.
+[importlinter:contract:provider-sdks-only-in-providers]
+name = LLM / embedding / reranker SDK imports confined to providers/
+type = forbidden
+source_modules =
+    app.api
+    app.services
+    app.schemas
+    app.repositories
+    app.workers
+    app.core
+    app.models
+forbidden_modules =
+    openai
+    anthropic
+    cohere
+    voyageai
+    sentence_transformers
+    tiktoken
+    transformers
+allow_indirect_imports = True
