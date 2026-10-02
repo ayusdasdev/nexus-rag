@@ -31,6 +31,7 @@ def main() -> int:
         result = subprocess.run(
             ["git", "ls-files", "--error-unmatch", str(path)],
             capture_output=True,
+            check=False,
         )
         if result.returncode == 0:
             print(

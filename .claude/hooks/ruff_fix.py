@@ -16,8 +16,10 @@ def main() -> int:
     if not file_path or not file_path.endswith(".py"):
         return 0
 
-    subprocess.run(["uv", "run", "ruff", "check", "--fix", "--quiet", file_path])
-    subprocess.run(["uv", "run", "ruff", "format", "--quiet", file_path])
+    subprocess.run(
+        ["uv", "run", "ruff", "check", "--fix", "--quiet", file_path], check=False
+    )
+    subprocess.run(["uv", "run", "ruff", "format", "--quiet", file_path], check=False)
     return 0
 
 
