@@ -331,3 +331,27 @@ async def test_enqueue_failure_on_requeue_marks_document_failed_and_returns_503(
     assert stored is not None
     assert stored.status == "failed"
     assert stored.error == "could not enqueue"
+
+
+EXPECTED_RESPONSE_FIELDS = {
+    "id",
+    "filename",
+    "content_type",
+    "size_bytes",
+    "sha256",
+    "status",
+    "error",
+    "created_at",
+}
+
+
+async def test_document_response_exposes_exact_fields_and_no_storage_path(
+    client: AsyncClient, queue: FakeTaskQueue, blob_root: Path
+) -> None:
+    signup = await _signup(client)
+
+    response = await _upload(client, signup["access_token"], _pdf_bytes())
+
+    assert set(response.json()) == EXPECTED_RESPONSE_FIELDS
+    assert set(DocumentResponse.model_fields) == EXPECTED_RESPONSE_FIELDS
+    assert not any("path" in name or "storage" in name for name in response.json())
