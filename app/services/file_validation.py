@@ -1,6 +1,8 @@
+import re
+
 _PDF_MAGIC = b"%PDF-"
-_HTML_PREFIXES = (b"<!doctype html", b"<html")
-_SNIFF_BYTES = 512
+_HTML_OPENING_TAG = re.compile(r"<(!doctype html|html|head|body)[\s>]")
+_SNIFF_CHARS = 512
 
 
 def detect_content_type(data: bytes) -> str | None:
@@ -15,10 +17,9 @@ def detect_content_type(data: bytes) -> str | None:
     if b"\x00" in data:
         return None
     try:
-        text = data.decode("utf-8")
+        text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
         return None
-    head = text[:_SNIFF_BYTES].lstrip().lower().encode("utf-8")
-    if head.startswith(_HTML_PREFIXES):
+    if _HTML_OPENING_TAG.match(text[:_SNIFF_CHARS].lstrip().lower()):
         return "text/html"
     return "text/plain"
