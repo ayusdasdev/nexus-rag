@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/1"
     qdrant_url: str = "http://localhost:6333"
 
+    max_upload_mb: int = 25
+    upload_dir: str = "data/uploads"
+
     # Placeholder for /ready only (no real auth). Real tenant-scoped endpoints
     # use Depends(get_tenant_id) from app/api/deps.py, never a client header.
     tenant_header_name: str = "X-Tenant-Id"

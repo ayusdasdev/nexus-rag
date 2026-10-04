@@ -33,3 +33,6 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Uploaded document bytes
+data/
