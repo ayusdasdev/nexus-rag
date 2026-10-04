@@ -15,7 +15,7 @@ from app.core.security import create_access_token
 # app/repositories/session.py is created once at import time and its
 # connection pool binds to whichever loop first uses it - the default
 # per-test loop scope would otherwise hand later tests a closed/foreign loop.
-pytestmark = pytest.mark.asyncio(loop_scope="module")
+pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 def _unique_email() -> str:

@@ -51,4 +51,5 @@ forbidden_modules =
     sentence_transformers
     tiktoken
     transformers
+    tokenizers
 allow_indirect_imports = True
