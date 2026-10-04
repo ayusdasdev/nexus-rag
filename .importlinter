@@ -52,4 +52,7 @@ forbidden_modules =
     tiktoken
     transformers
     tokenizers
+    pymupdf
+    pymupdf4llm
+    trafilatura
 allow_indirect_imports = True
