@@ -19,8 +19,13 @@ from app.models.base import Base
 
 
 class DocumentStatus(str, enum.Enum):
+    # `pending` predates the state machine and is no longer written; Postgres
+    # cannot drop enum values, so it stays in the type.
     pending = "pending"
+    uploaded = "uploaded"
     processing = "processing"
+    chunked = "chunked"
+    embedding = "embedding"
     ready = "ready"
     failed = "failed"
 
