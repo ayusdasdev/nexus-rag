@@ -8,6 +8,8 @@ from httpx import AsyncClient
 
 from app.api.documents import get_task_queue
 from app.main import app
+from app.models.document import DocumentStatus
+from app.repositories import document_repository
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
 from app.schemas.documents import DocumentResponse
 
@@ -224,3 +226,52 @@ async def test_get_document_without_token_returns_401(
     response = await client.get(f"/v1/documents/{uuid.uuid4()}")
 
     assert response.status_code == 401
+
+
+async def test_duplicate_of_failed_document_is_requeued_with_202(
+    client: AsyncClient, queue: FakeTaskQueue, blob_root: Path
+) -> None:
+    signup = await _signup(client)
+    token = signup["access_token"]
+    data = _pdf_bytes()
+    first = await _upload(client, token, data)
+    doc_id = uuid.UUID(first.json()["id"])
+    await document_repository.set_status(doc_id, DocumentStatus.failed, error="boom")
+
+    second = await _upload(client, token, data)
+
+    assert second.status_code == 202
+    body = DocumentResponse.model_validate(second.json())
+    assert body.id == doc_id
+    assert body.status == "uploaded"
+    assert body.error is None
+    assert queue.enqueued == [doc_id, doc_id]
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        DocumentStatus.uploaded,
+        DocumentStatus.processing,
+        DocumentStatus.chunked,
+        DocumentStatus.ready,
+    ],
+)
+async def test_duplicate_of_non_failed_document_returns_200_without_requeue(
+    client: AsyncClient,
+    queue: FakeTaskQueue,
+    blob_root: Path,
+    status: DocumentStatus,
+) -> None:
+    signup = await _signup(client)
+    token = signup["access_token"]
+    data = _pdf_bytes()
+    first = await _upload(client, token, data)
+    doc_id = uuid.UUID(first.json()["id"])
+    await document_repository.set_status(doc_id, status)
+
+    second = await _upload(client, token, data)
+
+    assert second.status_code == 200
+    assert second.json()["status"] == status.value
+    assert queue.enqueued == [doc_id]

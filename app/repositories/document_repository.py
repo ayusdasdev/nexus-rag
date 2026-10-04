@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
 from app.models.document import Document, DocumentStatus
@@ -89,3 +91,27 @@ async def get_by_id(tenant_id: UUID, document_id: UUID) -> DocumentRecord | None
         )
         row = result.scalars().first()
         return None if row is None else _to_record(row)
+
+
+async def set_status(
+    document_id: UUID, status: DocumentStatus, error: str | None = None
+) -> None:
+    async with session_scope() as session:
+        row = await session.get(Document, document_id)
+        if row is None:
+            raise LookupError(str(document_id))
+        row.status = status
+        row.error = error
+        await session.commit()
+
+
+async def reset_failed_to_uploaded(document_id: UUID) -> bool:
+    """Compare-and-set: succeeds only if the document is currently failed."""
+    async with session_scope() as session:
+        result = await session.execute(
+            update(Document)
+            .where(Document.id == document_id, Document.status == DocumentStatus.failed)
+            .values(status=DocumentStatus.uploaded, error=None)
+        )
+        await session.commit()
+        return cast(CursorResult[Any], result).rowcount > 0

@@ -1,9 +1,11 @@
+import dataclasses
 import hashlib
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Protocol
 from uuid import UUID
 
+from app.models.document import DocumentStatus
 from app.repositories import document_repository
 from app.repositories.blob_store import LocalBlobStore
 from app.repositories.document_repository import DocumentRecord, DuplicateDocument
@@ -40,7 +42,7 @@ class DocumentNotFound(Exception):
 @dataclass(frozen=True)
 class UploadResult:
     document: DocumentRecord
-    created: bool
+    queued: bool
 
 
 def _display_filename(raw: str | None) -> str:
@@ -89,7 +91,13 @@ class DocumentService:
         sha256 = hashlib.sha256(data).hexdigest()
         existing = await document_repository.get_by_sha256(tenant_id, sha256)
         if existing is not None:
-            return UploadResult(document=existing, created=False)
+            if existing.status == DocumentStatus.failed.value and (
+                await document_repository.reset_failed_to_uploaded(existing.id)
+            ):
+                await self._task_queue.enqueue_ingest(existing.id)
+                reset = dataclasses.replace(existing, status="uploaded", error=None)
+                return UploadResult(document=reset, queued=True)
+            return UploadResult(document=existing, queued=False)
 
         await self._blob_store.save(tenant_id, sha256, data)
         try:
@@ -106,10 +114,10 @@ class DocumentService:
             winner = await document_repository.get_by_sha256(tenant_id, sha256)
             if winner is None:
                 raise
-            return UploadResult(document=winner, created=False)
+            return UploadResult(document=winner, queued=False)
 
         await self._task_queue.enqueue_ingest(created.id)
-        return UploadResult(document=created, created=True)
+        return UploadResult(document=created, queued=True)
 
     async def get(self, *, tenant_id: UUID, document_id: UUID) -> DocumentRecord:
         document = await document_repository.get_by_id(tenant_id, document_id)

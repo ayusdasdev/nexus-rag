@@ -96,7 +96,7 @@ async def upload_document(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File is empty"
         ) from exc
 
-    if not result.created:
+    if not result.queued:
         response.status_code = status.HTTP_200_OK
     return _to_response(result.document)
 
