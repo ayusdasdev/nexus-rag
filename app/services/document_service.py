@@ -39,6 +39,10 @@ class DocumentNotFound(Exception):
     pass
 
 
+class EnqueueFailed(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class UploadResult:
     document: DocumentRecord
@@ -94,7 +98,7 @@ class DocumentService:
             if existing.status == DocumentStatus.failed.value and (
                 await document_repository.reset_failed_to_uploaded(existing.id)
             ):
-                await self._task_queue.enqueue_ingest(existing.id)
+                await self._enqueue(existing.id)
                 reset = dataclasses.replace(existing, status="uploaded", error=None)
                 return UploadResult(document=reset, queued=True)
             return UploadResult(document=existing, queued=False)
@@ -116,8 +120,18 @@ class DocumentService:
                 raise
             return UploadResult(document=winner, queued=False)
 
-        await self._task_queue.enqueue_ingest(created.id)
+        await self._enqueue(created.id)
         return UploadResult(document=created, queued=True)
+
+    async def _enqueue(self, document_id: UUID) -> None:
+        try:
+            await self._task_queue.enqueue_ingest(document_id)
+        except Exception as exc:
+            # The row is already committed; leaving it "uploaded" would strand it.
+            await document_repository.set_status(
+                document_id, DocumentStatus.failed, error="could not enqueue"
+            )
+            raise EnqueueFailed from exc
 
     async def get(self, *, tenant_id: UUID, document_id: UUID) -> DocumentRecord:
         document = await document_repository.get_by_id(tenant_id, document_id)

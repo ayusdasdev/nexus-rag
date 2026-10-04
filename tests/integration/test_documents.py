@@ -275,3 +275,59 @@ async def test_duplicate_of_non_failed_document_returns_200_without_requeue(
     assert second.status_code == 200
     assert second.json()["status"] == status.value
     assert queue.enqueued == [doc_id]
+
+
+class BrokenTaskQueue:
+    async def enqueue_ingest(self, document_id: uuid.UUID) -> None:
+        raise ConnectionError("broker unreachable")
+
+
+@pytest.fixture
+def broken_queue() -> BrokenTaskQueue:
+    broken = BrokenTaskQueue()
+    app.dependency_overrides[get_task_queue] = lambda: broken
+    return broken
+
+
+async def test_enqueue_failure_marks_document_failed_and_returns_503(
+    client: AsyncClient, broken_queue: BrokenTaskQueue, blob_root: Path
+) -> None:
+    signup = await _signup(client)
+    tenant_id = uuid.UUID(signup["user"]["tenant_id"])
+    data = _pdf_bytes()
+
+    response = await _upload(client, signup["access_token"], data)
+
+    assert response.status_code == 503
+    stored = await document_repository.get_by_sha256(
+        tenant_id, hashlib.sha256(data).hexdigest()
+    )
+    assert stored is not None
+    assert stored.status == "failed"
+    assert stored.error == "could not enqueue"
+
+
+async def test_enqueue_failure_on_requeue_marks_document_failed_and_returns_503(
+    client: AsyncClient,
+    queue: FakeTaskQueue,
+    blob_root: Path,
+) -> None:
+    signup = await _signup(client)
+    tenant_id = uuid.UUID(signup["user"]["tenant_id"])
+    token = signup["access_token"]
+    data = _pdf_bytes()
+    first = await _upload(client, token, data)
+    doc_id = uuid.UUID(first.json()["id"])
+    await document_repository.set_status(doc_id, DocumentStatus.failed, error="boom")
+    broken = BrokenTaskQueue()
+    app.dependency_overrides[get_task_queue] = lambda: broken
+
+    response = await _upload(client, token, data)
+
+    assert response.status_code == 503
+    stored = await document_repository.get_by_sha256(
+        tenant_id, hashlib.sha256(data).hexdigest()
+    )
+    assert stored is not None
+    assert stored.status == "failed"
+    assert stored.error == "could not enqueue"

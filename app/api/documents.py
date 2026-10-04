@@ -19,6 +19,7 @@ from app.services.document_service import (
     DocumentNotFound,
     DocumentService,
     EmptyFile,
+    EnqueueFailed,
     FileTooLarge,
     TaskQueue,
     UnsupportedFileType,
@@ -90,6 +91,11 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Unsupported file type",
+        ) from exc
+    except EnqueueFailed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingestion queue unavailable",
         ) from exc
     except EmptyFile as exc:
         raise HTTPException(
