@@ -10,8 +10,6 @@ from app.services.auth_service import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-# Only this one route is versioned so far - not the whole auth surface.
-router_v1 = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 @router.post(
@@ -70,9 +68,6 @@ async def login(
 
 
 @router.get("/me", response_model=UserProfile, summary="Get the current user's profile")
-@router_v1.get(
-    "/me", response_model=UserProfile, summary="Get the current user's profile"
-)
 async def me(
     current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
 ) -> UserProfile:
