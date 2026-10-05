@@ -56,6 +56,9 @@ class Document(Base):
         server_default=DocumentStatus.pending.value,
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
