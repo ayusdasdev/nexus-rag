@@ -1,4 +1,4 @@
-.PHONY: up down dev worker test test-int lint migrate
+.PHONY: up down dev worker test test-int lint migrate fetch-models
 
 up:
 	docker compose up -d
@@ -26,3 +26,6 @@ lint:
 
 migrate:
 	uv run alembic upgrade head
+
+fetch-models:
+	uv run python -m app.providers.tokenizer --fetch
