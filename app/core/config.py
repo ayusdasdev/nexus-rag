@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,8 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
 
     max_upload_mb: int = 25
+    # "parent_child" is reserved; selecting it fails the document with a clear message.
+    chunk_strategy: Literal["structure", "parent_child"] = "structure"
     upload_dir: str = "data/uploads"
 
     # Placeholder for /ready only (no real auth). Real tenant-scoped endpoints
