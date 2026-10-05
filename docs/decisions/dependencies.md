@@ -15,3 +15,4 @@ same commit that adds it (see CLAUDE.md "Do NOT").
 | 2026-10-04 | celery 5.6.3 | Task queue. The API enqueues `ingest_document`, and the worker consumes it. Direct dependency of the app (`app/workers`). Uses the Redis broker. | - |
 | 2026-10-04 | pymupdf-layout 1.28.2 | Transitive, required by pymupdf4llm 1.28.2. Layout analysis that pymupdf4llm uses for its Markdown output (headings, tables). Not imported directly. | - |
 | 2026-10-04 | onnxruntime 1.30.0 | Transitive, required by pymupdf-layout. Runs its ONNX layout model on CPU. Largest transitive package here; it is the main reason the install is heavy. | - |
+| 2026-10-05 | trafilatura 2.3.0 | HTML main-content extraction (drops nav/footer/boilerplate, keeps headings and lists as Markdown). Licence Apache-2.0 (checked in the installed LICENSE). Chosen over readability-lxml (less maintained) and hand-written BeautifulSoup stripping. Only imported from `app/providers/`. | - |

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Caching in practice</title>
+  <script>window.tracking = {id: "abc"};</script>
+</head>
+<body>
+  <nav>
+    <ul><li><a href="/">Home</a></li><li><a href="/blog">Blog</a></li><li><a href="/login">Log in</a></li></ul>
+  </nav>
+  <article>
+    <h1>Caching in practice</h1>
+    <p>A cache trades memory for latency. This article covers the three patterns that matter
+    most in day-to-day services, and when each one is the right choice for a read-heavy path.</p>
+    <h2>Cache-aside</h2>
+    <p>The application checks the cache first and loads from the database on a miss.</p>
+    <ul>
+      <li>Simple to reason about</li>
+      <li>Stale data is possible until the TTL expires</li>
+    </ul>
+    <h2>Write-through</h2>
+    <p>Every write goes to the cache and the database together, so reads stay fresh.</p>
+  </article>
+  <aside><p>Subscribe to our newsletter for weekly posts.</p></aside>
+  <footer>
+    <p>Copyright 2026. <a href="/privacy">Privacy</a> <a href="/terms">Terms</a></p>
+  </footer>
+</body>
+</html>
