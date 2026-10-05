@@ -18,6 +18,9 @@ class LocalBlobStore:
         await asyncio.to_thread(_write, path, data)
         return path
 
+    async def delete(self, tenant_id: UUID, sha256: str) -> None:
+        await asyncio.to_thread(self.path_for(tenant_id, sha256).unlink, True)
+
 
 def _write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

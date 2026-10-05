@@ -6,8 +6,9 @@ from typing import Protocol
 from uuid import UUID
 
 from app.models.document import DocumentStatus
-from app.repositories import document_repository
+from app.repositories import chunk_repository, document_repository
 from app.repositories.blob_store import LocalBlobStore
+from app.repositories.chunk_repository import ChunkRecord
 from app.repositories.document_repository import DocumentRecord, DuplicateDocument
 from app.services.file_validation import detect_content_type
 
@@ -138,3 +139,22 @@ class DocumentService:
         if document is None:
             raise DocumentNotFound
         return document
+
+    async def list_documents(
+        self, *, tenant_id: UUID, limit: int, offset: int
+    ) -> tuple[list[DocumentRecord], int]:
+        return await document_repository.list_documents(tenant_id, limit, offset)
+
+    async def list_chunks(
+        self, *, tenant_id: UUID, document_id: UUID, limit: int, offset: int
+    ) -> tuple[list[ChunkRecord], int]:
+        if await document_repository.get_by_id(tenant_id, document_id) is None:
+            raise DocumentNotFound
+        return await chunk_repository.list_chunks(tenant_id, document_id, limit, offset)
+
+    async def delete(self, *, tenant_id: UUID, document_id: UUID) -> None:
+        deleted = await document_repository.delete_document(tenant_id, document_id)
+        if deleted is None:
+            raise DocumentNotFound
+        # Row first, then file: no reader can see a row whose bytes are gone.
+        await self._blob_store.delete(tenant_id, deleted.sha256)

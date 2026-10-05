@@ -34,3 +34,47 @@ class DocumentResponse(BaseModel):
             }
         }
     )
+
+
+class DocumentPage(BaseModel):
+    """One page of the caller's documents, newest first."""
+
+    items: list[DocumentResponse]
+    total: int = Field(description="Total documents in the tenant.")
+    limit: int
+    offset: int
+
+
+class ChunkResponse(BaseModel):
+    """A chunk produced from a document."""
+
+    id: uuid.UUID = Field(
+        description="Deterministic: uuid5 of document id and chunk index."
+    )
+    chunk_index: int
+    text: str
+    heading_path: str | None = Field(
+        default=None, description="Ancestor headings, e.g. 'A > B'."
+    )
+    page: int | None = Field(default=None, description="Source page when known.")
+    token_count: int = Field(description="Content tokens, excluding [CLS]/[SEP].")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c",
+                "chunk_index": 0,
+                "text": "Install the tools before you start.",
+                "heading_path": "Handbook > Setup",
+                "page": None,
+                "token_count": 7,
+            }
+        }
+    )
+
+
+class ChunkPage(BaseModel):
+    items: list[ChunkResponse]
+    total: int
+    limit: int
+    offset: int

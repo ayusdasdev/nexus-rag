@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Response,
     UploadFile,
     status,
@@ -14,7 +15,12 @@ from app.api.deps import CurrentUser, get_current_user
 from app.core.config import get_settings
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
 from app.repositories.document_repository import DocumentRecord
-from app.schemas.documents import DocumentResponse
+from app.schemas.documents import (
+    ChunkPage,
+    ChunkResponse,
+    DocumentPage,
+    DocumentResponse,
+)
 from app.services.document_service import (
     DocumentNotFound,
     DocumentService,
@@ -127,3 +133,88 @@ async def get_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         ) from exc
     return _to_response(document)
+
+
+_LIMIT = Query(default=20, ge=1, le=100)
+_OFFSET = Query(default=0, ge=0)
+
+
+@router.get("", response_model=DocumentPage, summary="List the tenant's documents")
+async def list_documents(
+    limit: int = _LIMIT,
+    offset: int = _OFFSET,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
+) -> DocumentPage:
+    """Newest first. Only documents in the caller's tenant."""
+    records, total = await service.list_documents(
+        tenant_id=current_user.tenant_id, limit=limit, offset=offset
+    )
+    return DocumentPage(
+        items=[_to_response(record) for record in records],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/{document_id}/chunks",
+    response_model=ChunkPage,
+    summary="List a document's chunks",
+)
+async def list_chunks(
+    document_id: UUID,
+    limit: int = _LIMIT,
+    offset: int = _OFFSET,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
+) -> ChunkPage:
+    """Chunks in chunk_index order. 404 if the document is not in the caller's tenant."""
+    try:
+        records, total = await service.list_chunks(
+            tenant_id=current_user.tenant_id,
+            document_id=document_id,
+            limit=limit,
+            offset=offset,
+        )
+    except DocumentNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        ) from exc
+    return ChunkPage(
+        items=[
+            ChunkResponse(
+                id=record.id,
+                chunk_index=record.chunk_index,
+                text=record.text,
+                heading_path=record.heading_path,
+                page=record.page,
+                token_count=record.token_count,
+            )
+            for record in records
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a document, its chunks and its stored file",
+)
+async def delete_document(
+    document_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
+) -> Response:
+    """Removes the row (chunks cascade) and then the stored file. 404 for other tenants."""
+    try:
+        await service.delete(tenant_id=current_user.tenant_id, document_id=document_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

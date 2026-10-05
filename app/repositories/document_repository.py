@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
@@ -102,6 +102,7 @@ async def set_status(
             raise LookupError(str(document_id))
         row.status = status
         row.error = error
+        row.status_updated_at = func.now()
         await session.commit()
 
 
@@ -111,7 +112,45 @@ async def reset_failed_to_uploaded(document_id: UUID) -> bool:
         result = await session.execute(
             update(Document)
             .where(Document.id == document_id, Document.status == DocumentStatus.failed)
-            .values(status=DocumentStatus.uploaded, error=None)
+            .values(
+                status=DocumentStatus.uploaded, error=None, status_updated_at=func.now()
+            )
         )
         await session.commit()
         return cast(CursorResult[Any], result).rowcount > 0
+
+
+async def list_documents(
+    tenant_id: UUID, limit: int, offset: int
+) -> tuple[list[DocumentRecord], int]:
+    async with session_scope() as session:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.tenant_id == tenant_id)
+        )
+        result = await session.execute(
+            select(Document)
+            .where(Document.tenant_id == tenant_id)
+            .order_by(Document.created_at.desc(), Document.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [_to_record(row) for row in result.scalars().all()], int(total or 0)
+
+
+async def delete_document(tenant_id: UUID, document_id: UUID) -> DocumentRecord | None:
+    """Delete the row (chunks cascade). Returns the deleted record, or None if absent."""
+    async with session_scope() as session:
+        result = await session.execute(
+            select(Document).where(
+                Document.id == document_id, Document.tenant_id == tenant_id
+            )
+        )
+        row = result.scalars().first()
+        if row is None:
+            return None
+        record = _to_record(row)
+        await session.delete(row)
+        await session.commit()
+        return record
