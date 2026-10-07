@@ -13,8 +13,10 @@ from fastapi import (
 
 from app.api.deps import CurrentUser, get_current_user
 from app.core.config import get_settings
+from app.core.errors import TransientError
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
 from app.repositories.document_repository import DocumentRecord
+from app.repositories.vector_store import VectorStore, get_vector_store
 from app.schemas.documents import (
     ChunkPage,
     ChunkResponse,
@@ -42,10 +44,12 @@ def get_task_queue() -> TaskQueue:
 def get_document_service(
     blob_store: LocalBlobStore = Depends(get_blob_store),  # noqa: B008 - FastAPI DI pattern
     task_queue: TaskQueue = Depends(get_task_queue),  # noqa: B008 - FastAPI DI pattern
+    vectors: VectorStore = Depends(get_vector_store),  # noqa: B008 - FastAPI DI pattern
 ) -> DocumentService:
     return DocumentService(
         blob_store=blob_store,
         task_queue=task_queue,
+        vectors=vectors,
         max_upload_bytes=get_settings().max_upload_mb * 1024 * 1024,
     )
 
@@ -216,5 +220,10 @@ async def delete_document(
     except DocumentNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        ) from exc
+    except TransientError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vector store is temporarily unavailable; retry the delete",
         ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

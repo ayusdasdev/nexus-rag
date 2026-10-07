@@ -1,4 +1,4 @@
-.PHONY: up down dev worker test test-int lint migrate fetch-models
+.PHONY: up down dev worker test test-int lint migrate fetch-models sample-docs
 
 up:
 	docker compose up -d
@@ -29,3 +29,7 @@ migrate:
 
 fetch-models:
 	uv run python -m app.providers.tokenizer --fetch
+	uv run python -m app.providers.embeddings --fetch
+
+sample-docs:
+	uv run python scripts/make_sample_docs.py

@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import hashlib
 from dataclasses import dataclass
@@ -22,6 +23,10 @@ class ByteSource(Protocol):
 
 class TaskQueue(Protocol):
     async def enqueue_ingest(self, document_id: UUID) -> None: ...
+
+
+class VectorDeleter(Protocol):
+    def delete_document(self, tenant_id: UUID, document_id: UUID) -> None: ...
 
 
 class FileTooLarge(Exception):
@@ -71,10 +76,12 @@ class DocumentService:
         *,
         blob_store: LocalBlobStore,
         task_queue: TaskQueue,
+        vectors: VectorDeleter,
         max_upload_bytes: int,
     ) -> None:
         self._blob_store = blob_store
         self._task_queue = task_queue
+        self._vectors = vectors
         self._max_upload_bytes = max_upload_bytes
 
     async def upload(
@@ -153,6 +160,8 @@ class DocumentService:
         return await chunk_repository.list_chunks(tenant_id, document_id, limit, offset)
 
     async def delete(self, *, tenant_id: UUID, document_id: UUID) -> None:
+        # Vectors first: if Qdrant is unavailable the row survives and the delete can be retried.
+        await asyncio.to_thread(self._vectors.delete_document, tenant_id, document_id)
         deleted = await document_repository.delete_document(tenant_id, document_id)
         if deleted is None:
             raise DocumentNotFound

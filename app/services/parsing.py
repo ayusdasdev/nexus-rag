@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,6 +7,13 @@ from app.providers.document_extractors import extract_html, extract_pdf
 
 PDF_MIN_CHARS = 200
 _HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+_HEADING_BOLD = re.compile(r"^(#{1,6}\s+)\*\*(.+?)\*\*\s*$")
+_PARAGRAPH_BOLD = re.compile(r"^(\s*)\*\*(.+?)\*\*\s*$")
+
+# A running header or footer must repeat on most pages, and sit at a page edge.
+RUNNING_MIN_PAGES = 3
+RUNNING_MIN_SHARE = 0.8
+RUNNING_EDGE_LINES = 2
 
 
 class NoExtractableText(Exception):
@@ -51,13 +59,66 @@ def _first_heading(markdown: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _unbold(line: str) -> str:
+    heading = _HEADING_BOLD.match(line)
+    if heading:
+        return f"{heading.group(1)}{heading.group(2)}"
+    paragraph = _PARAGRAPH_BOLD.match(line)
+    if paragraph:
+        return f"{paragraph.group(1)}{paragraph.group(2)}"
+    return line
+
+
+def _match_key(line: str) -> str:
+    return re.sub(r"^[#\s*]+|[*\s]+$", "", line)
+
+
+def _edge_indices(lines: list[str]) -> set[int]:
+    nonempty = [i for i, line in enumerate(lines) if line.strip()]
+    return set(nonempty[:RUNNING_EDGE_LINES]) | set(nonempty[-RUNNING_EDGE_LINES:])
+
+
+def strip_running_lines(pages: list[str]) -> list[str]:
+    """Remove a header or footer line that repeats at a page edge on most pages.
+
+    Only documents with at least RUNNING_MIN_PAGES pages are changed. Only each page's
+    first and last RUNNING_EDGE_LINES non-empty lines are candidates, so a repeated line in
+    the middle of a page (such as a table header) is kept.
+    """
+    if len(pages) < RUNNING_MIN_PAGES:
+        return list(pages)
+    split = [page.split("\n") for page in pages]
+    counts: Counter[str] = Counter()
+    for lines in split:
+        keys = {_match_key(lines[i]) for i in _edge_indices(lines)}
+        counts.update(key for key in keys if key)
+    threshold = RUNNING_MIN_SHARE * len(pages)
+    running = {key for key, count in counts.items() if count >= threshold}
+    result: list[str] = []
+    for lines in split:
+        edges = _edge_indices(lines)
+        kept = [
+            line
+            for i, line in enumerate(lines)
+            if not (i in edges and _match_key(line) in running)
+        ]
+        result.append("\n".join(kept))
+    return result
+
+
 def _parse_pdf(path: Path) -> ParsedDocument:
     extraction = extract_pdf(path)
+    pages = strip_running_lines(
+        [
+            "\n".join(_unbold(line) for line in page.markdown.split("\n"))
+            for page in extraction.pages
+        ]
+    )
     parts: list[str] = []
     spans: list[PageSpan] = []
     offset = 0
-    for page in extraction.pages:
-        text = page.markdown.strip()
+    for page_number, page_text in zip((p.page_number for p in extraction.pages), pages):
+        text = page_text.strip()
         if not text:
             continue
         if parts:
@@ -65,7 +126,7 @@ def _parse_pdf(path: Path) -> ParsedDocument:
         start = offset
         parts.append(text)
         offset += len(text)
-        spans.append(PageSpan(page=page.page_number, start=start, end=offset))
+        spans.append(PageSpan(page=page_number, start=start, end=offset))
 
     markdown = "\n\n".join(parts)
     check_pdf_text(markdown)

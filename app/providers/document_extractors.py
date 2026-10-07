@@ -18,7 +18,7 @@ class PdfExtraction:
 
 
 def extract_pdf(path: Path) -> PdfExtraction:
-    chunks = pymupdf4llm.to_markdown(str(path), page_chunks=True)
+    chunks = pymupdf4llm.to_markdown(str(path), page_chunks=True, footer=False)
     pages = [
         PdfPage(
             page_number=int(chunk["metadata"]["page_number"]), markdown=chunk["text"]

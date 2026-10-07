@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     max_upload_mb: int = 25
     # "parent_child" is reserved; selecting it fails the document with a clear message.
     chunk_strategy: Literal["structure", "parent_child"] = "structure"
+    embedder: Literal["bge", "fake"] = "bge"
+    fastembed_cache_dir: str = "data/fastembed_cache"
+    embed_batch_size: int = 32
+    # Prefix for query text only (BGE v1.5 retrieval instruction). Empty disables it.
+    bge_query_instruction: str = ""
+    # Prepend the chunk's heading_path to the text given to the embedder. Off by
+    # default: unverified whether it helps retrieval for this corpus.
+    embed_with_heading: bool = False
     upload_dir: str = "data/uploads"
 
     # Placeholder for /ready only (no real auth). Real tenant-scoped endpoints
