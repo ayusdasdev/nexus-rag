@@ -9,9 +9,10 @@ from app.providers.embeddings import get_embedder, get_sparse_embedder
 from app.providers.reranker import RERANK_MAX_CANDIDATES, Reranker, rerank
 from app.repositories.chunk_repository import ChunkRecord
 from app.repositories.vector_store import VectorHit
+from app.services.fusion import RRF_K, rrf_from_ranks
 
 EXPAND_LIMIT = 50
-_RRF_K = 60
+_RRF_K = RRF_K
 
 Source = Literal["dense", "sparse", "fused", "rerank"]
 
@@ -131,13 +132,11 @@ def _to_candidate(hit: VectorHit, rank: int, source: Source) -> Candidate:
 def fuse_rrf(
     dense: Sequence[Candidate], sparse: Sequence[Candidate]
 ) -> list[Candidate]:
-    """Reciprocal Rank Fusion: score(id) = sum over lists containing id of 1/(k + rank)."""
-    scores: dict[UUID, float] = {}
-    for candidate in (*dense, *sparse):
-        scores[candidate.chunk_id] = scores.get(candidate.chunk_id, 0.0) + 1.0 / (
-            _RRF_K + candidate.rank
-        )
-    ordered = sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
+    """Reciprocal Rank Fusion of the two candidate lists, using each candidate's rank."""
+    ordered = rrf_from_ranks(
+        [[(c.chunk_id, c.rank) for c in dense], [(c.chunk_id, c.rank) for c in sparse]],
+        _RRF_K,
+    )
     return [
         Candidate(chunk_id=chunk_id, score=score, rank=rank, source="fused")
         for rank, (chunk_id, score) in enumerate(ordered, start=1)

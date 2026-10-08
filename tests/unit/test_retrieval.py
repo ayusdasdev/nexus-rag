@@ -307,6 +307,30 @@ def test_fuse_rrf_assigns_contiguous_ranks_from_1() -> None:
     assert [c.rank for c in fused] == [1, 2, 3]
 
 
+def test_fuse_rrf_breaks_score_ties_by_chunk_id() -> None:
+    low = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    high = uuid.UUID("ffffffff-0000-0000-0000-000000000000")
+    # Both rank 1 in one list each: both score 1/61, so the lower id wins the tie.
+    dense = [Candidate(chunk_id=high, score=0.9, rank=1, source="dense")]
+    sparse = [Candidate(chunk_id=low, score=3.0, rank=1, source="sparse")]
+
+    fused = retrieval.fuse_rrf(dense, sparse)
+
+    assert [c.chunk_id for c in fused] == [low, high]
+
+
+def test_fuse_rrf_counts_a_chunk_repeated_in_one_list_once() -> None:
+    cid = uuid.uuid4()
+    dense = [
+        Candidate(chunk_id=cid, score=0.9, rank=1, source="dense"),
+        Candidate(chunk_id=cid, score=0.8, rank=2, source="dense"),
+    ]
+
+    fused = retrieval.fuse_rrf(dense, [])
+
+    assert fused[0].score == pytest.approx(1.0 / (retrieval._RRF_K + 1))
+
+
 # --- retrieve() orchestration ---------------------------------------------------
 
 
