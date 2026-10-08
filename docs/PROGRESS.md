@@ -22,18 +22,15 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   The note that described it was lost in the crash (this file was untracked until M4 closed).
   If it shows up again, capture the full output before any retry.
 
-## Intermittent 401 in integration tests (root cause found 2026-10-08, not fixed)
+## Intermittent 401 in integration tests (fixed 2026-10-08, `5d46126`, ADR-0006)
 
-- [?] Seen once in `test_search.py::test_search_returns_only_chunks_of_ready_documents[pending-reranked]`:
-  an upload right after signup got `401 {"detail":"Could not validate credentials"}`.
-- Cause, measured: the WSL wall clock steps back about 1.4 s (-0.59 s then -0.82 s) every
-  ~30 s (`dmesg`: `systemd-journald: Time jumped backwards`, 107 times so far). PyJWT 2.15
-  rejects `iat > now` with zero leeway (`.venv/.../jwt/api_jwt.py:482`), and
-  `app/core/security.py` passes no leeway, so a token issued just before a step fails for
-  about a second.
-- Proposed fix (needs your OK, it touches auth): a `JWT_LEEWAY_SECONDS` setting (e.g. 5)
-  passed to `jwt.decode`, plus a unit test with a token whose `iat` is 2 s in the future.
-  Real deployments see skew between hosts too, so this isn't only a WSL workaround.
+- [x] Cause: the WSL wall clock steps back about 1.4 s every ~30 s, and PyJWT rejected
+  `iat > now` with zero leeway. A unit test reproduced it before the fix
+  (`ImmatureSignatureError: The token is not yet valid (iat)`).
+- [x] `JWT_LEEWAY_SECONDS` (default 5, range 0-60). A token expired by 10 s and an `iat` 30 s in
+  the future are still rejected.
+- [x] `make test-int` after the fix, run alone: **142 passed** in 135 s (several clock steps
+  inside the run), no 401. `make test`: **208 passed**.
 
 ## Audit findings (new, not in your list)
 
@@ -108,9 +105,11 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
     are skipped without the key.
   - `get_llm()` factory.
   New deps: `anthropic`, and `httpx` moves to runtime. Both explained in chat first.
-- [?] Ollama model choice and pull. Ollama is **not installed** (no `ollama` binary, nothing
-  on :11434). WSL sees 9 GB RAM, 4 CPUs. Your message left the RAM and model as
-  placeholders; waiting for the model name.
+- [?] Ollama `llama3.2:3b` inside WSL (your choice). Not installed yet. Install is about
+  1.44 GB plus `zstd`, and the model is about 2.02 GB. Waiting for your OK to download.
+- [?] Dependencies: every `anthropic` release since 1.6.0 needs `httpx2` (pydantic's httpx
+  successor), not `httpx`. Proposal in chat; waiting for your OK.
+- [?] 5.1 prompt-injection defence: you explain it first, then the ADR.
 - [ ] 5.3 `app/prompts/rag_system.md` and the user template, loaded at runtime. Add a CLAUDE.md line:
   prompts live in `app/prompts/`.
 - [ ] 5.3 `app/services/generation.py` pure functions: `build_messages` (context budget
