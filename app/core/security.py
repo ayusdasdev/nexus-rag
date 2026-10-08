@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -46,7 +46,7 @@ def create_access_token(
         if expires_delta is not None
         else timedelta(minutes=settings.jwt_expire_minutes)
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "tid": str(tenant_id),

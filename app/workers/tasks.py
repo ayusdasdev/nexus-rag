@@ -1,6 +1,6 @@
 from collections.abc import Iterator, Mapping, Sequence
 from functools import lru_cache
-from typing import Any, TypeVar
+from typing import Any
 from uuid import UUID
 
 from celery import Task
@@ -27,8 +27,6 @@ log = get_task_logger(__name__)
 
 _MAX_ERROR_CHARS = 2000
 EMBED_BATCH_SIZE = 32
-
-T = TypeVar("T")
 
 
 class PermanentEmbedError(Exception):
@@ -177,7 +175,7 @@ def embedding_text(text: str, heading_path: str | None, with_heading: bool) -> s
     return text
 
 
-def batched(items: Sequence[T], size: int) -> Iterator[Sequence[T]]:
+def batched[T](items: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     for start in range(0, len(items), size):
         yield items[start : start + size]
 
