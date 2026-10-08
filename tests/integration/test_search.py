@@ -94,19 +94,31 @@ async def _seeded(client: AsyncClient, store: VectorStore) -> dict[str, Any]:
     assert signup.status_code == 201, signup.text
     headers = {"Authorization": f"Bearer {signup.json()['access_token']}"}
     tenant_id = uuid.UUID(signup.json()["user"]["tenant_id"])
+    ids = await _add_document(client, store, headers, tenant_id, TEXTS)
+    return {"headers": headers, "tenant_id": tenant_id, "chunk_ids": ids}
 
+
+async def _add_document(
+    client: AsyncClient,
+    store: VectorStore,
+    headers: dict[str, str],
+    tenant_id: uuid.UUID,
+    texts: list[str],
+    status: DocumentStatus = DocumentStatus.ready,
+) -> list[uuid.UUID]:
+    """Upload a document, then seed its chunks and vectors directly, in `status`."""
     upload = await client.post(
         "/v1/documents",
         headers=headers,
-        files={"file": ("widget.md", "\n\n".join(TEXTS).encode(), "text/markdown")},
+        files={"file": ("widget.md", "\n\n".join(texts).encode(), "text/markdown")},
     )
     assert upload.status_code in (200, 202), upload.text
     document_id = uuid.UUID(upload.json()["id"])
-    await document_repository.set_status(document_id, DocumentStatus.ready)
+    await document_repository.set_status(document_id, status)
 
-    ids = [chunk_id(document_id, index) for index in range(len(TEXTS))]
+    ids = [chunk_id(document_id, index) for index in range(len(texts))]
     async with session_scope() as session:
-        for index, text in enumerate(TEXTS):
+        for index, text in enumerate(texts):
             session.add(
                 Chunk(
                     id=ids[index],
@@ -121,8 +133,8 @@ async def _seeded(client: AsyncClient, store: VectorStore) -> dict[str, Any]:
             )
         await session.commit()
 
-    dense = FakeEmbedder().embed_documents(TEXTS)
-    sparse = FakeSparseEmbedder().embed_documents(TEXTS)
+    dense = FakeEmbedder().embed_documents(texts)
+    sparse = FakeSparseEmbedder().embed_documents(texts)
     store.upsert_points(
         [
             VectorPoint(
@@ -134,10 +146,10 @@ async def _seeded(client: AsyncClient, store: VectorStore) -> dict[str, Any]:
                 sparse_indices=sparse[index].indices,
                 sparse_values=sparse[index].values,
             )
-            for index in range(len(TEXTS))
+            for index in range(len(texts))
         ]
     )
-    return {"headers": headers, "chunk_ids": ids}
+    return ids
 
 
 async def _search(
@@ -312,3 +324,35 @@ async def test_no_switch_combination_returns_another_tenants_chunks(
     assert result["items"]
     assert returned <= own
     assert not returned & {str(c) for c in tenant_a["chunk_ids"]}
+
+
+NOT_READY = [status for status in DocumentStatus if status is not DocumentStatus.ready]
+
+
+@pytest.mark.parametrize("rerank", [False, True], ids=["fused", "reranked"])
+@pytest.mark.parametrize("status", NOT_READY, ids=[s.value for s in NOT_READY])
+async def test_search_returns_only_chunks_of_ready_documents(
+    client: AsyncClient, store: VectorStore, status: DocumentStatus, rerank: bool
+) -> None:
+    seeded = await _seeded(client, store)
+    # Same tenant, text equal to the query, so it would rank first if it leaked.
+    hidden = await _add_document(
+        client, store, seeded["headers"], seeded["tenant_id"], [QUERY], status
+    )
+
+    result = await _search(
+        client,
+        seeded["headers"],
+        limit=len(TEXTS),
+        rerank=rerank,
+        expand="neighbors",
+    )
+
+    returned = {item["chunk_id"] for item in result["items"]}
+    returned |= {n["chunk_id"] for item in result["items"] for n in item["neighbors"]}
+    assert str(hidden[0]) not in returned
+    # The hidden chunk must not take a slot: limit is filled from the ready document.
+    assert len(result["items"]) == len(TEXTS)
+    assert {item["chunk_id"] for item in result["items"]} <= {
+        str(c) for c in seeded["chunk_ids"]
+    }

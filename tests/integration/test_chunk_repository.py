@@ -6,6 +6,7 @@ import pytest
 
 from app.core.ids import chunk_id
 from app.models.chunk import Chunk
+from app.models.document import DocumentStatus
 from app.repositories import auth_repository, chunk_repository, document_repository
 from app.repositories.session import session_scope
 
@@ -13,7 +14,12 @@ from app.repositories.session import session_scope
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
-async def _tenant_with_document() -> tuple[UUID, UUID]:
+NOT_READY = [status for status in DocumentStatus if status is not DocumentStatus.ready]
+
+
+async def _tenant_with_document(
+    status: DocumentStatus = DocumentStatus.ready,
+) -> tuple[UUID, UUID]:
     tenant, user = await auth_repository.create_tenant_and_admin_user(
         f"tenant-{uuid.uuid4().hex}", f"user-{uuid.uuid4().hex}@example.com", "hash"
     )
@@ -26,6 +32,7 @@ async def _tenant_with_document() -> tuple[UUID, UUID]:
         size_bytes=10,
         sha256=sha,
     )
+    await document_repository.set_status(document.id, status)
     return tenant.id, document.id
 
 
@@ -129,6 +136,8 @@ async def test_fetch_neighbors_does_not_mix_positions_across_documents() -> None
         ).id
         for name in ("one", "two")
     ]
+    for doc in (doc_1, doc_2):
+        await document_repository.set_status(doc, DocumentStatus.ready)
     for doc, index in ((doc_1, 0), (doc_1, 1), (doc_2, 0), (doc_2, 1)):
         await _make_chunk(tenant.id, doc, index, f"{doc}:{index}")
 
@@ -143,3 +152,46 @@ async def test_fetch_neighbors_of_no_keys_returns_empty() -> None:
     tenant_id, _document_id = await _tenant_with_document()
 
     assert await chunk_repository.fetch_neighbors(tenant_id, []) == []
+
+
+@pytest.mark.parametrize("status", NOT_READY, ids=[s.value for s in NOT_READY])
+async def test_fetch_chunks_skips_chunks_of_a_document_that_is_not_ready(
+    status: DocumentStatus,
+) -> None:
+    # One tenant, two documents: only the status tells their chunks apart.
+    tenant, user = await auth_repository.create_tenant_and_admin_user(
+        f"tenant-{uuid.uuid4().hex}", f"user-{uuid.uuid4().hex}@example.com", "hash"
+    )
+    ready_doc, not_ready_doc = [
+        (
+            await document_repository.create_document(
+                tenant_id=tenant.id,
+                uploaded_by=user.id,
+                filename=f"{name}.md",
+                content_type="text/markdown",
+                size_bytes=10,
+                sha256=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+            )
+        ).id
+        for name in ("ready", "not-ready")
+    ]
+    await document_repository.set_status(ready_doc, DocumentStatus.ready)
+    await document_repository.set_status(not_ready_doc, status)
+    shown = await _make_chunk(tenant.id, ready_doc, 0, "shown")
+    hidden = await _make_chunk(tenant.id, not_ready_doc, 0, "hidden")
+
+    records = await chunk_repository.fetch_chunks(tenant.id, [shown, hidden])
+
+    assert [record.id for record in records] == [shown]
+
+
+@pytest.mark.parametrize("status", NOT_READY, ids=[s.value for s in NOT_READY])
+async def test_fetch_neighbors_skips_chunks_of_a_document_that_is_not_ready(
+    status: DocumentStatus,
+) -> None:
+    tenant_id, document_id = await _tenant_with_document(status)
+    await _make_chunk(tenant_id, document_id, 0, "zero")
+
+    records = await chunk_repository.fetch_neighbors(tenant_id, [(document_id, 0)])
+
+    assert records == []

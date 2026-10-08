@@ -827,3 +827,35 @@ async def test_neighbor_keys_are_ordered_numerically_by_chunk_index(
 
     # 9 before 11 (a string sort would put "11" first).
     assert calls == [(tenant, [(doc, 9), (doc, 11)])]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_rerank", [False, True], ids=["fused", "reranked"])
+async def test_a_chunk_the_fetcher_drops_does_not_take_a_slot_in_limit(
+    monkeypatch: pytest.MonkeyPatch, use_rerank: bool
+) -> None:
+    # fetch_chunks drops chunks of documents that aren't ready. The top fused hit is
+    # one of them, so limit=2 must still be filled from the next two.
+    _fixed_embed_query(monkeypatch)
+    tenant, doc, hidden_doc = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    hidden, c1, c2 = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    store = FakeVectorStore(
+        dense_hits=[
+            _hit_id(hidden, hidden_doc, 0, 0.99),
+            _hit_id(c1, doc, 0, 0.9),
+            _hit_id(c2, doc, 1, 0.8),
+        ],
+        sparse_hits=[],
+    )
+
+    result = await retrieval.retrieve(
+        store=store,
+        reranker=_TextScoredReranker({"A": 1.0, "B": 0.5}),
+        fetch_chunks=_fetcher([_record(c1, doc, 0, "A"), _record(c2, doc, 1, "B")]),
+        tenant_id=tenant,
+        query="q",
+        limit=2,
+        use_rerank=use_rerank,
+    )
+
+    assert [item.chunk_id for item in result.items] == [c1, c2]

@@ -221,12 +221,18 @@ async def retrieve(
     fused = fuse_rrf(dense, sparse)
     stages.append(StageTiming("fuse", _elapsed_ms(start)))
 
+    # Hydrate the whole fused list (at most 2 x candidates ids) before cutting it, so a
+    # chunk fetch_chunks drops (another tenant's, or a document that isn't ready) never
+    # takes a slot in limit or in the rerank window.
+    start = time.perf_counter()
+    records = await fetch_chunks(tenant_id, [c.chunk_id for c in fused])
+    stages.append(StageTiming("fetch_chunks", _elapsed_ms(start)))
+    by_id = {record.id: record for record in records}
+    available = [c for c in fused if c.chunk_id in by_id]
+
     rerank_items: list[Candidate] = []
-    if use_rerank and fused:
-        capped = fused[:RERANK_MAX_CANDIDATES]
-        records = await fetch_chunks(tenant_id, [c.chunk_id for c in capped])
-        by_id = {record.id: record for record in records}
-        ordered = [c for c in capped if c.chunk_id in by_id]
+    if use_rerank and available:
+        ordered = available[:RERANK_MAX_CANDIDATES]
         texts = [by_id[c.chunk_id].text for c in ordered]
 
         start = time.perf_counter()
@@ -246,11 +252,7 @@ async def retrieve(
         ]
         final_ranking = rerank_items[:limit]
     else:
-        final_ranking = fused[:limit]
-        start = time.perf_counter()
-        records = await fetch_chunks(tenant_id, [c.chunk_id for c in final_ranking])
-        stages.append(StageTiming("fetch_chunks", _elapsed_ms(start)))
-        by_id = {record.id: record for record in records}
+        final_ranking = available[:limit]
 
     items = [
         RetrievedChunk(
