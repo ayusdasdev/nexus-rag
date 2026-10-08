@@ -84,3 +84,62 @@ async def test_fetch_chunks_of_empty_ids_returns_empty() -> None:
     tenant_id, _document_id = await _tenant_with_document()
 
     assert await chunk_repository.fetch_chunks(tenant_id, []) == []
+
+
+async def test_fetch_neighbors_returns_chunks_at_the_requested_positions() -> None:
+    tenant_id, document_id = await _tenant_with_document()
+    await _make_chunk(tenant_id, document_id, 0, "zero")
+    await _make_chunk(tenant_id, document_id, 1, "one")
+    await _make_chunk(tenant_id, document_id, 2, "two")
+
+    records = await chunk_repository.fetch_neighbors(
+        tenant_id, [(document_id, 0), (document_id, 2)]
+    )
+
+    assert sorted((r.chunk_index, r.text) for r in records) == [(0, "zero"), (2, "two")]
+
+
+async def test_fetch_neighbors_never_returns_another_tenants_chunks() -> None:
+    tenant_a, doc_a = await _tenant_with_document()
+    tenant_b, doc_b = await _tenant_with_document()
+    await _make_chunk(tenant_a, doc_a, 1, "mine")
+    await _make_chunk(tenant_b, doc_b, 1, "not mine")
+
+    records = await chunk_repository.fetch_neighbors(tenant_a, [(doc_a, 1), (doc_b, 1)])
+
+    assert [r.text for r in records] == ["mine"]
+
+
+async def test_fetch_neighbors_does_not_mix_positions_across_documents() -> None:
+    # (doc_1, 0) and (doc_2, 1) are asked for; (doc_1, 1) and (doc_2, 0) exist too and
+    # must not match, as they would if documents and indexes were filtered separately.
+    tenant, user = await auth_repository.create_tenant_and_admin_user(
+        f"tenant-{uuid.uuid4().hex}", f"user-{uuid.uuid4().hex}@example.com", "hash"
+    )
+    doc_1, doc_2 = [
+        (
+            await document_repository.create_document(
+                tenant_id=tenant.id,
+                uploaded_by=user.id,
+                filename=f"{name}.md",
+                content_type="text/markdown",
+                size_bytes=10,
+                sha256=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
+            )
+        ).id
+        for name in ("one", "two")
+    ]
+    for doc, index in ((doc_1, 0), (doc_1, 1), (doc_2, 0), (doc_2, 1)):
+        await _make_chunk(tenant.id, doc, index, f"{doc}:{index}")
+
+    records = await chunk_repository.fetch_neighbors(
+        tenant.id, [(doc_1, 0), (doc_2, 1)]
+    )
+
+    assert sorted(r.text for r in records) == sorted([f"{doc_1}:0", f"{doc_2}:1"])
+
+
+async def test_fetch_neighbors_of_no_keys_returns_empty() -> None:
+    tenant_id, _document_id = await _tenant_with_document()
+
+    assert await chunk_repository.fetch_neighbors(tenant_id, []) == []
