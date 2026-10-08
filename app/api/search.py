@@ -2,9 +2,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import get_tenant_id
+from app.api.deps import CurrentUser, get_current_user, get_tenant_id
 from app.core.config import Settings, get_settings
 from app.core.errors import TransientError
+from app.models.user import UserRole
 from app.providers.embeddings import ModelNotCached
 from app.providers.reranker import Reranker, get_reranker
 from app.repositories import chunk_repository
@@ -50,6 +51,7 @@ def _to_trace_response(trace: Trace) -> TraceResponse:
 async def search(
     request: SearchRequest,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
+    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008
     store: VectorStore = Depends(get_vector_store),  # noqa: B008 - FastAPI DI pattern
     reranker: Reranker = Depends(get_reranker),  # noqa: B008 - FastAPI DI pattern
     settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
@@ -57,11 +59,17 @@ async def search(
     """Dense + sparse search, fused by RRF and reranked. Scoped to the caller's tenant.
 
     mode (dense|sparse|hybrid), rerank, candidates and expand (none|neighbors) each
-    default to the matching setting when omitted. document_ids, when given, restricts the search to those documents - a document the
-    caller's tenant doesn't own simply matches nothing, rather than erroring. Set
-    debug=true to get the retrieval trace (per-stage timing, and the ranked ids from
-    each stage) in the response.
+    default to the matching setting when omitted. document_ids, when given, restricts
+    the search to those documents - a document the caller's tenant doesn't own simply
+    matches nothing, rather than erroring. Only chunks of ready documents are returned.
+    debug=true (admins only; 403 otherwise) adds the retrieval trace: per-stage timing
+    and the ranked ids from each stage.
     """
+    if request.debug and current_user.role != UserRole.admin.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="debug=true is limited to admins",
+        )
     mode = request.mode if request.mode is not None else settings.retrieval_mode
     try:
         result = await retrieve(

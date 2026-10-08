@@ -17,7 +17,9 @@ class SearchRequest(BaseModel):
     )
     limit: int = Field(default=10, ge=1, le=50)
     debug: bool = Field(
-        default=False, description="Include the retrieval trace in the response."
+        default=False,
+        description="Include the retrieval trace in the response. Admins only; "
+        "a non-admin gets 403.",
     )
     mode: RetrievalMode | None = Field(
         default=None,

@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 from qdrant_client import QdrantClient
+from sqlalchemy import select
 
 from app.api.documents import get_task_queue
 from app.core.config import Settings, get_settings
@@ -20,6 +21,7 @@ from app.core.ids import chunk_id
 from app.main import app
 from app.models.chunk import Chunk
 from app.models.document import DocumentStatus
+from app.models.user import User, UserRole
 from app.providers import embeddings
 from app.providers import reranker as reranker_module
 from app.providers.embeddings import FakeEmbedder, FakeSparseEmbedder
@@ -356,3 +358,50 @@ async def test_search_returns_only_chunks_of_ready_documents(
     assert {item["chunk_id"] for item in result["items"]} <= {
         str(c) for c in seeded["chunk_ids"]
     }
+
+
+async def _demote_to_member(tenant_id: uuid.UUID) -> None:
+    async with session_scope() as session:
+        user = await session.scalar(select(User).where(User.tenant_id == tenant_id))
+        assert user is not None
+        user.role = UserRole.member
+        await session.commit()
+
+
+async def test_debug_search_by_a_non_admin_is_403(
+    client: AsyncClient, store: VectorStore
+) -> None:
+    seeded = await _seeded(client, store)
+    await _demote_to_member(seeded["tenant_id"])
+
+    response = await client.post(
+        SEARCH_URL, headers=seeded["headers"], json={"query": QUERY, "debug": True}
+    )
+
+    assert response.status_code == 403
+    assert "trace" not in response.text
+
+
+async def test_search_without_debug_by_a_non_admin_succeeds_without_a_trace(
+    client: AsyncClient, store: VectorStore
+) -> None:
+    seeded = await _seeded(client, store)
+    await _demote_to_member(seeded["tenant_id"])
+
+    response = await client.post(
+        SEARCH_URL, headers=seeded["headers"], json={"query": QUERY}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"]
+    assert response.json()["trace"] is None
+
+
+async def test_debug_search_by_an_admin_returns_the_trace(
+    client: AsyncClient, store: VectorStore
+) -> None:
+    seeded = await _seeded(client, store)
+
+    result = await _search(client, seeded["headers"])
+
+    assert result["trace"]["stages"]
