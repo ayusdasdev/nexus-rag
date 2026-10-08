@@ -282,3 +282,33 @@ async def test_a_request_switch_overrides_the_setting(
 
     assert "dense_search" in _stage_names(result)
     assert "sparse_search" not in _stage_names(result)
+
+
+@pytest.mark.parametrize(
+    "switches",
+    [
+        {"mode": "dense", "rerank": False},
+        {"mode": "sparse", "rerank": False},
+        {"mode": "hybrid", "rerank": False},
+        {"mode": "hybrid", "rerank": True},
+        {"mode": "hybrid", "rerank": True, "expand": "neighbors"},
+    ],
+)
+async def test_no_switch_combination_returns_another_tenants_chunks(
+    client: AsyncClient, store: VectorStore, switches: dict[str, Any]
+) -> None:
+    # Both tenants hold identical texts in the same collection, so any missing
+    # tenant filter would surface A's chunks for B.
+    tenant_a = await _seeded(client, store)
+    tenant_b = await _seeded(client, store)
+
+    result = await _search(client, tenant_b["headers"], **switches)
+
+    own = {str(c) for c in tenant_b["chunk_ids"]}
+    returned = {item["chunk_id"] for item in result["items"]}
+    returned |= {n["chunk_id"] for item in result["items"] for n in item["neighbors"]}
+    for stage in ("dense", "sparse", "fused", "rerank"):
+        returned |= {entry["chunk_id"] for entry in result["trace"].get(stage) or []}
+    assert result["items"]
+    assert returned <= own
+    assert not returned & {str(c) for c in tenant_a["chunk_ids"]}
