@@ -36,10 +36,6 @@ class Settings(BaseSettings):
     embed_with_heading: bool = False
     upload_dir: str = "data/uploads"
 
-    # Placeholder for /ready only (no real auth). Real tenant-scoped endpoints
-    # use Depends(get_tenant_id) from app/api/deps.py, never a client header.
-    tenant_header_name: str = "X-Tenant-Id"
-
     # Must be overridden via .env in any real deployment.
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"

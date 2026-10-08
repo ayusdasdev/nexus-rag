@@ -27,3 +27,9 @@ def test_production_accepts_strong_jwt_secret() -> None:
 def test_local_env_allows_default_jwt_secret() -> None:
     settings = Settings(app_env="local")
     assert settings.jwt_secret
+
+
+def test_settings_offer_no_client_supplied_tenant_header() -> None:
+    """tenant_id comes only from the token (CLAUDE.md); a configurable tenant header
+    would invite reading it from the request instead."""
+    assert not any("tenant" in name for name in Settings.model_fields)
