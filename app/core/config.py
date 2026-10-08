@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     jwt_secret: str = _DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    # Clock-skew tolerance for iat and exp. It also lets a token live up to this long
+    # past exp, so keep it small (ADR-0006).
+    jwt_leeway_seconds: int = Field(default=5, ge=0, le=60)
 
     @model_validator(mode="after")
     def _forbid_default_jwt_secret_in_production(self) -> "Settings":

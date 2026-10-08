@@ -61,7 +61,10 @@ def decode_access_token(token: str) -> TokenPayload:
     settings = get_settings()
     try:
         payload = jwt.decode(
-            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            leeway=settings.jwt_leeway_seconds,
         )
     except jwt.InvalidTokenError as exc:
         raise InvalidToken(str(exc)) from exc
