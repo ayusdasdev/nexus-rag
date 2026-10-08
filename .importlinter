@@ -49,6 +49,7 @@ forbidden_modules =
     cohere
     voyageai
     sentence_transformers
+    fastembed
     tiktoken
     transformers
     tokenizers
