@@ -30,6 +30,7 @@ migrate:
 fetch-models:
 	uv run python -m app.providers.tokenizer --fetch
 	uv run python -m app.providers.embeddings --fetch
+	uv run python -m app.providers.reranker --fetch
 
 sample-docs:
 	uv run python scripts/make_sample_docs.py

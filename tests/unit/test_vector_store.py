@@ -291,3 +291,108 @@ def test_delete_document_removes_only_that_document_of_that_tenant(
 def test_collection_name_is_derived_from_the_embedder_name() -> None:
     assert collection_name("bge-base-en-v1.5") == "chunks__bge-base-en-v1_5"
     assert collection_name("fake-32") == "chunks__fake-32"
+
+
+def test_search_dense_with_document_ids_restricts_to_those_documents(
+    store: VectorStore,
+) -> None:
+    tenant = uuid.uuid4()
+    doc_a, doc_b = uuid.uuid4(), uuid.uuid4()
+    store.upsert_points(
+        [
+            _point(tenant, doc_a, 0, "shared text"),
+            _point(tenant, doc_b, 0, "shared text"),
+        ]
+    )
+
+    hits = store.search_dense(
+        tenant,
+        FakeEmbedder().embed_documents(["shared text"])[0],
+        10,
+        document_ids={doc_a},
+    )
+
+    assert [h.document_id for h in hits] == [doc_a]
+
+
+def test_search_sparse_with_document_ids_restricts_to_those_documents(
+    store: VectorStore,
+) -> None:
+    tenant = uuid.uuid4()
+    doc_a, doc_b = uuid.uuid4(), uuid.uuid4()
+    store.upsert_points(
+        [
+            _point(tenant, doc_a, 0, "shared text"),
+            _point(tenant, doc_b, 0, "shared text"),
+        ]
+    )
+    sparse = FakeSparseEmbedder().embed_documents(["shared text"])[0]
+
+    hits = store.search_sparse(
+        tenant, sparse.indices, sparse.values, 10, document_ids={doc_b}
+    )
+
+    assert [h.document_id for h in hits] == [doc_b]
+
+
+def test_search_with_document_ids_naming_another_tenants_document_returns_nothing(
+    store: VectorStore,
+) -> None:
+    tenant_a, tenant_b = uuid.uuid4(), uuid.uuid4()
+    doc_b = uuid.uuid4()
+    store.upsert_points([_point(tenant_b, doc_b, 0, "shared text")])
+
+    hits = store.search_dense(
+        tenant_a,
+        FakeEmbedder().embed_documents(["shared text"])[0],
+        10,
+        document_ids={doc_b},
+    )
+
+    assert hits == []
+
+
+def test_search_dense_with_an_empty_document_ids_matches_nothing(
+    store: VectorStore,
+) -> None:
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    store.upsert_points([_point(tenant, doc, 0, "shared text")])
+
+    hits = store.search_dense(
+        tenant,
+        FakeEmbedder().embed_documents(["shared text"])[0],
+        10,
+        document_ids=set(),
+    )
+
+    assert hits == []
+
+
+def test_search_sparse_with_an_empty_document_ids_matches_nothing(
+    store: VectorStore,
+) -> None:
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    store.upsert_points([_point(tenant, doc, 0, "shared text")])
+    sparse = FakeSparseEmbedder().embed_documents(["shared text"])[0]
+
+    hits = store.search_sparse(
+        tenant, sparse.indices, sparse.values, 10, document_ids=[]
+    )
+
+    assert hits == []
+
+
+def test_search_dense_with_document_ids_none_is_unrestricted(
+    store: VectorStore,
+) -> None:
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    store.upsert_points([_point(tenant, doc, 0, "shared text")])
+
+    hits = store.search_dense(
+        tenant,
+        FakeEmbedder().embed_documents(["shared text"])[0],
+        10,
+        document_ids=None,
+    )
+
+    assert [h.document_id for h in hits] == [doc]

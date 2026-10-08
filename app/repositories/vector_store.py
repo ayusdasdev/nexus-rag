@@ -146,14 +146,20 @@ class VectorStore:
             )
 
     def search_dense(
-        self, tenant_id: uuid.UUID, vector: Sequence[float], limit: int
+        self,
+        tenant_id: uuid.UUID,
+        vector: Sequence[float],
+        limit: int,
+        document_ids: Collection[uuid.UUID] | None = None,
     ) -> list[VectorHit]:
+        if document_ids is not None and not document_ids:
+            return []  # "restrict to these documents" with zero documents: match nothing
         with _translated():
             response = self._client.query_points(
                 self._collection,
                 query=list(vector),
                 using=DENSE,
-                query_filter=self._filter(tenant_id),
+                query_filter=self._filter(tenant_id, document_ids=document_ids),
                 limit=limit,
                 with_payload=True,
             )
@@ -165,13 +171,16 @@ class VectorStore:
         indices: Sequence[int],
         values: Sequence[float],
         limit: int,
+        document_ids: Collection[uuid.UUID] | None = None,
     ) -> list[VectorHit]:
+        if document_ids is not None and not document_ids:
+            return []  # "restrict to these documents" with zero documents: match nothing
         with _translated():
             response = self._client.query_points(
                 self._collection,
                 query=qm.SparseVector(indices=list(indices), values=list(values)),
                 using=SPARSE,
-                query_filter=self._filter(tenant_id),
+                query_filter=self._filter(tenant_id, document_ids=document_ids),
                 limit=limit,
                 with_payload=True,
             )
@@ -181,6 +190,7 @@ class VectorStore:
         self,
         tenant_id: uuid.UUID,
         document_id: uuid.UUID | None = None,
+        document_ids: Collection[uuid.UUID] | None = None,
         exclude: Collection[uuid.UUID] = (),
     ) -> qm.Filter:
         must: list[qm.Condition] = [
@@ -192,6 +202,13 @@ class VectorStore:
             must.append(
                 qm.FieldCondition(
                     key="document_id", match=qm.MatchValue(value=str(document_id))
+                )
+            )
+        if document_ids:
+            must.append(
+                qm.FieldCondition(
+                    key="document_id",
+                    match=qm.MatchAny(any=[str(d) for d in document_ids]),
                 )
             )
         must_not: list[qm.Condition] = []
