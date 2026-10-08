@@ -22,6 +22,19 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   The note that described it was lost in the crash (this file was untracked until M4 closed).
   If it shows up again, capture the full output before any retry.
 
+## Intermittent 401 in integration tests (root cause found 2026-10-08, not fixed)
+
+- [?] Seen once in `test_search.py::test_search_returns_only_chunks_of_ready_documents[pending-reranked]`:
+  an upload right after signup got `401 {"detail":"Could not validate credentials"}`.
+- Cause, measured: the WSL wall clock steps back about 1.4 s (-0.59 s then -0.82 s) every
+  ~30 s (`dmesg`: `systemd-journald: Time jumped backwards`, 107 times so far). PyJWT 2.15
+  rejects `iat > now` with zero leeway (`.venv/.../jwt/api_jwt.py:482`), and
+  `app/core/security.py` passes no leeway, so a token issued just before a step fails for
+  about a second.
+- Proposed fix (needs your OK, it touches auth): a `JWT_LEEWAY_SECONDS` setting (e.g. 5)
+  passed to `jwt.decode`, plus a unit test with a token whose `iat` is 2 s in the future.
+  Real deployments see skew between hosts too, so this isn't only a WSL workaround.
+
 ## Audit findings (new, not in your list)
 
 - [x] `pyproject.toml` restored and `uv.lock` regenerated (`ed64212`). The lock had listed
@@ -75,11 +88,9 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
 - [ ] LOW: `rerank=true` + `candidates=100` lets any user run a 50-pair cross-encoder pass
   per request with no rate limit. Covered by the M7 7.2 per-tenant rate limiter; consider a
   concurrency cap around rerank there too.
-- [?] LOW: `fetch_chunks` and `fetch_neighbors` don't filter on document status, so chunks of
-  a document that is being re-processed can still be returned. Not a tenant leak. Should
-  non-`ready` documents be hidden from search? You decide.
-- [?] INFO: `debug=true` is open to every authenticated user. The trace holds only own-tenant
-  chunk ids, scores and timings. Admin-only? You decide (affects the M8 runner).
+- [x] Search returns only chunks of `ready` documents, filtered in
+  `chunk_repository._searchable`; `limit` is still filled (`6eb3ca7`, ADR-0004).
+- [x] `debug=true` is admin-only; a non-admin gets 403 (`0f10c7d`, ADR-0005).
 - [ ] Missing tests the reviewer named: `expand=neighbors` with `document_ids` never attaches
   neighbors from another document; a unit assertion that `fetch_neighbors` receives the
   caller's tenant_id; `candidates=101` gives 422 at the HTTP level.
@@ -97,7 +108,9 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
     are skipped without the key.
   - `get_llm()` factory.
   New deps: `anthropic`, and `httpx` moves to runtime. Both explained in chat first.
-- [?] Ollama model choice and pull. That's a model download, so I'll ask at M5 start.
+- [?] Ollama model choice and pull. Ollama is **not installed** (no `ollama` binary, nothing
+  on :11434). WSL sees 9 GB RAM, 4 CPUs. Your message left the RAM and model as
+  placeholders; waiting for the model name.
 - [ ] 5.3 `app/prompts/rag_system.md` and the user template, loaded at runtime. Add a CLAUDE.md line:
   prompts live in `app/prompts/`.
 - [ ] 5.3 `app/services/generation.py` pure functions: `build_messages` (context budget
