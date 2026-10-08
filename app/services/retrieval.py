@@ -1,17 +1,18 @@
 import asyncio
 import time
 from collections.abc import Awaitable, Callable, Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Protocol
 from uuid import UUID
 
+from app.core.config import Expand
 from app.providers.embeddings import get_embedder, get_sparse_embedder
 from app.providers.reranker import RERANK_MAX_CANDIDATES, Reranker, rerank
 from app.repositories.chunk_repository import ChunkRecord
 from app.repositories.vector_store import VectorHit
 from app.services.fusion import RRF_K, rrf_from_ranks
 
-EXPAND_LIMIT = 50
+DEFAULT_CANDIDATES = 40
 _RRF_K = RRF_K
 
 Source = Literal["dense", "sparse", "fused", "rerank"]
@@ -57,6 +58,8 @@ class RetrievedChunk:
     page: int | None
     score: float
     rank: int
+    # Chunks at chunk_index -1/+1 in the same document, when expand="neighbors".
+    neighbors: tuple[ChunkRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,11 @@ class VectorSearcher(Protocol):
 # What retrieve() needs from chunk_repository.fetch_chunks: an id lookup scoped to the
 # tenant. Injectable so retrieve() is unit-testable without Postgres.
 ChunkFetcher = Callable[[UUID, Sequence[UUID]], Awaitable[list[ChunkRecord]]]
+# What expansion needs from chunk_repository.fetch_neighbors: (document_id, chunk_index)
+# lookups, also scoped to the tenant.
+NeighborFetcher = Callable[
+    [UUID, Sequence[tuple[UUID, int]]], Awaitable[list[ChunkRecord]]
+]
 
 
 def embed_query(text: str) -> QueryEmbedding:
@@ -154,22 +162,28 @@ async def retrieve(
     fetch_chunks: ChunkFetcher,
     tenant_id: UUID,
     query: str,
+    fetch_neighbors: NeighborFetcher | None = None,
     document_ids: Collection[UUID] | None = None,
     limit: int = 10,
-    expand_limit: int = EXPAND_LIMIT,
+    candidates: int = DEFAULT_CANDIDATES,
     use_dense: bool = True,
     use_sparse: bool = True,
     use_rerank: bool = True,
+    expand: Expand = "none",
     trace: bool = False,
 ) -> RetrieveResult:
-    """Embed -> dense/sparse search -> RRF fuse -> optional rerank -> hydrate from Postgres.
+    """Embed -> dense/sparse search -> RRF fuse -> optional rerank -> hydrate from Postgres
+    -> optional neighbor expansion.
 
-    use_dense/use_sparse/use_rerank let a caller skip a stage. document_ids, when given,
-    restricts the vector search (not just a post-filter) to those documents. Every search
-    is tenant-scoped; this never trusts anything but tenant_id for that.
+    use_dense/use_sparse/use_rerank let a caller skip a stage; candidates is how many
+    results each search returns. document_ids, when given, restricts the vector search
+    (not just a post-filter) to those documents. Every search and fetch is
+    tenant-scoped; this never trusts anything but tenant_id for that.
     """
     if not use_dense and not use_sparse:
         raise ValueError("at least one of use_dense or use_sparse must be true")
+    if expand == "neighbors" and fetch_neighbors is None:
+        raise ValueError("expand='neighbors' needs fetch_neighbors")
 
     stages: list[StageTiming] = []
 
@@ -185,7 +199,7 @@ async def retrieve(
             store,
             tenant_id,
             query_embedding,
-            expand_limit,
+            candidates,
             document_ids,
         )
         stages.append(StageTiming("dense_search", _elapsed_ms(start)))
@@ -198,7 +212,7 @@ async def retrieve(
             store,
             tenant_id,
             query_embedding,
-            expand_limit,
+            candidates,
             document_ids,
         )
         stages.append(StageTiming("sparse_search", _elapsed_ms(start)))
@@ -253,6 +267,11 @@ async def retrieve(
         if candidate.chunk_id in by_id
     ]
 
+    if expand == "neighbors" and fetch_neighbors is not None:
+        start = time.perf_counter()
+        items = await _attach_neighbors(items, tenant_id, fetch_neighbors)
+        stages.append(StageTiming("expand", _elapsed_ms(start)))
+
     result_trace = (
         Trace(
             stages=stages, dense=dense, sparse=sparse, fused=fused, rerank=rerank_items
@@ -261,3 +280,35 @@ async def retrieve(
         else None
     )
     return RetrieveResult(items=items, trace=result_trace)
+
+
+async def _attach_neighbors(
+    items: list[RetrievedChunk], tenant_id: UUID, fetch_neighbors: NeighborFetcher
+) -> list[RetrievedChunk]:
+    """Attach chunk_index -1/+1 of each item, skipping chunks already returned as items."""
+    returned = {(item.document_id, item.chunk_index) for item in items}
+    wanted: list[tuple[UUID, int]] = []
+    for item in items:
+        for index in (item.chunk_index - 1, item.chunk_index + 1):
+            key = (item.document_id, index)
+            if index >= 0 and key not in returned and key not in wanted:
+                wanted.append(key)
+    if not wanted:
+        return items
+    found = {
+        (record.document_id, record.chunk_index): record
+        for record in await fetch_neighbors(
+            tenant_id, sorted(wanted, key=lambda key: (str(key[0]), key[1]))
+        )
+    }
+    return [
+        replace(
+            item,
+            neighbors=tuple(
+                found[(item.document_id, index)]
+                for index in (item.chunk_index - 1, item.chunk_index + 1)
+                if (item.document_id, index) in found
+            ),
+        )
+        for item in items
+    ]

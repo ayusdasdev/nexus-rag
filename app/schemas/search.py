@@ -2,6 +2,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import Expand, RetrievalMode
+
 
 class SearchRequest(BaseModel):
     """A search over the caller's own chunks. tenant_id always comes from the token."""
@@ -17,6 +19,28 @@ class SearchRequest(BaseModel):
     debug: bool = Field(
         default=False, description="Include the retrieval trace in the response."
     )
+    mode: RetrievalMode | None = Field(
+        default=None,
+        description="dense, sparse or hybrid (both, fused by RRF). Default: the "
+        "RETRIEVAL_MODE setting.",
+    )
+    rerank: bool | None = Field(
+        default=None,
+        description="Rerank fused candidates with the cross-encoder. Default: the "
+        "RERANK setting.",
+    )
+    candidates: int | None = Field(
+        default=None,
+        ge=1,
+        le=100,
+        description="Results requested from each search before fusion. Default: the "
+        "CANDIDATES setting.",
+    )
+    expand: Expand | None = Field(
+        default=None,
+        description="'neighbors' attaches the chunks just before and after each hit "
+        "in its document. Default: the EXPAND setting.",
+    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -26,9 +50,21 @@ class SearchRequest(BaseModel):
                 "document_ids": None,
                 "limit": 10,
                 "debug": False,
+                "mode": "hybrid",
+                "rerank": True,
+                "candidates": 40,
+                "expand": "none",
             }
         },
     )
+
+
+class NeighborChunk(BaseModel):
+    """A chunk adjacent to a hit in the same document, attached by expand=neighbors."""
+
+    chunk_id: uuid.UUID
+    chunk_index: int
+    text: str
 
 
 class SearchHit(BaseModel):
@@ -41,6 +77,10 @@ class SearchHit(BaseModel):
     heading_path: str | None = Field(default=None)
     page: int | None = Field(default=None)
     score: float
+    neighbors: list[NeighborChunk] = Field(
+        default_factory=list,
+        description="Adjacent chunks in chunk_index order; empty unless expand=neighbors.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -52,6 +92,7 @@ class SearchHit(BaseModel):
                 "heading_path": "Handbook > Specifications",
                 "page": 2,
                 "score": 7.42,
+                "neighbors": [],
             }
         }
     )

@@ -1,10 +1,14 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_JWT_SECRET = "dev-insecure-secret-change-me-before-deploying"
+
+RetrievalMode = Literal["dense", "sparse", "hybrid"]
+# "parent" joins when parent_child chunking exists; until then it is not accepted.
+Expand = Literal["none", "neighbors"]
 
 
 class Settings(BaseSettings):
@@ -35,6 +39,13 @@ class Settings(BaseSettings):
     # default: unverified whether it helps retrieval for this corpus.
     embed_with_heading: bool = False
     upload_dir: str = "data/uploads"
+
+    # Retrieval defaults; POST /v1/search may override each per request.
+    retrieval_mode: RetrievalMode = "hybrid"
+    rerank: bool = True
+    # Results requested from each of the dense and sparse searches.
+    candidates: int = Field(default=40, ge=1, le=100)
+    expand: Expand = "none"
 
     # Must be overridden via .env in any real deployment.
     jwt_secret: str = _DEFAULT_JWT_SECRET

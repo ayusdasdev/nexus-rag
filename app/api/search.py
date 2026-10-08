@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_tenant_id
+from app.core.config import Settings, get_settings
 from app.core.errors import TransientError
 from app.providers.embeddings import ModelNotCached
 from app.providers.reranker import Reranker, get_reranker
@@ -13,6 +14,7 @@ from app.repositories.vector_store import (
     get_vector_store,
 )
 from app.schemas.search import (
+    NeighborChunk,
     RankedItemResponse,
     SearchHit,
     SearchRequest,
@@ -50,23 +52,38 @@ async def search(
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     store: VectorStore = Depends(get_vector_store),  # noqa: B008 - FastAPI DI pattern
     reranker: Reranker = Depends(get_reranker),  # noqa: B008 - FastAPI DI pattern
+    settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
 ) -> SearchResponse:
     """Dense + sparse search, fused by RRF and reranked. Scoped to the caller's tenant.
 
-    document_ids, when given, restricts the search to those documents - a document the
+    mode (dense|sparse|hybrid), rerank, candidates and expand (none|neighbors) each
+    default to the matching setting when omitted. document_ids, when given, restricts the search to those documents - a document the
     caller's tenant doesn't own simply matches nothing, rather than erroring. Set
     debug=true to get the retrieval trace (per-stage timing, and the ranked ids from
     each stage) in the response.
     """
+    mode = request.mode if request.mode is not None else settings.retrieval_mode
     try:
         result = await retrieve(
             store=store,
             reranker=reranker,
             fetch_chunks=chunk_repository.fetch_chunks,
+            fetch_neighbors=chunk_repository.fetch_neighbors,
             tenant_id=tenant_id,
             query=request.query,
             document_ids=request.document_ids,
             limit=request.limit,
+            candidates=(
+                request.candidates
+                if request.candidates is not None
+                else settings.candidates
+            ),
+            use_dense=mode in ("dense", "hybrid"),
+            use_sparse=mode in ("sparse", "hybrid"),
+            use_rerank=request.rerank
+            if request.rerank is not None
+            else settings.rerank,
+            expand=request.expand if request.expand is not None else settings.expand,
             trace=request.debug,
         )
     except TransientError as exc:
@@ -94,6 +111,14 @@ async def search(
                 heading_path=item.heading_path,
                 page=item.page,
                 score=item.score,
+                neighbors=[
+                    NeighborChunk(
+                        chunk_id=neighbor.id,
+                        chunk_index=neighbor.chunk_index,
+                        text=neighbor.text,
+                    )
+                    for neighbor in item.neighbors
+                ],
             )
             for item in result.items
         ],

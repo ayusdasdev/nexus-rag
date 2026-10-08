@@ -623,3 +623,207 @@ async def test_retrieve_trace_includes_every_stage_when_requested(
     assert [c.chunk_id for c in result.trace.dense] == [c1]
     assert [c.chunk_id for c in result.trace.fused] == [c1]
     assert [c.chunk_id for c in result.trace.rerank] == [c1]
+
+
+# --- candidates and neighbor expansion ------------------------------------------
+
+
+def _record(chunk_id: uuid.UUID, doc: uuid.UUID, index: int, text: str) -> ChunkRecord:
+    return ChunkRecord(
+        id=chunk_id,
+        document_id=doc,
+        chunk_index=index,
+        text=text,
+        heading_path=None,
+        page=None,
+        token_count=1,
+    )
+
+
+def _neighbor_fetcher(
+    records: list[ChunkRecord],
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]],
+) -> "retrieval.NeighborFetcher":
+    by_key = {(r.document_id, r.chunk_index): r for r in records}
+
+    async def fetch(
+        tenant_id: uuid.UUID, keys: Sequence[tuple[uuid.UUID, int]]
+    ) -> list[ChunkRecord]:
+        calls.append((tenant_id, list(keys)))
+        return [by_key[key] for key in keys if key in by_key]
+
+    return fetch
+
+
+@pytest.mark.asyncio
+async def test_retrieve_asks_each_store_list_for_candidates_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    store = FakeVectorStore(dense_hits=[], sparse_hits=[])
+
+    await retrieval.retrieve(
+        store=store,
+        reranker=_TextScoredReranker({}),
+        fetch_chunks=_fetcher([]),
+        tenant_id=uuid.uuid4(),
+        query="q",
+        candidates=17,
+    )
+
+    assert store.dense_calls[0][2] == 17
+    assert store.sparse_calls[0][3] == 17
+
+
+@pytest.mark.asyncio
+async def test_retrieve_without_expansion_attaches_no_neighbors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    doc, c1 = uuid.uuid4(), uuid.uuid4()
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]] = []
+
+    result = await retrieval.retrieve(
+        store=FakeVectorStore(dense_hits=[_hit_id(c1, doc, 5, 0.9)], sparse_hits=[]),
+        reranker=_TextScoredReranker({"mid": 1.0}),
+        fetch_chunks=_fetcher([_record(c1, doc, 5, "mid")]),
+        fetch_neighbors=_neighbor_fetcher([], calls),
+        tenant_id=uuid.uuid4(),
+        query="q",
+    )
+
+    assert result.items[0].neighbors == ()
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_neighbor_expansion_attaches_the_chunks_either_side_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    hit, before, after = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]] = []
+    neighbors = [_record(after, doc, 6, "after"), _record(before, doc, 4, "before")]
+
+    result = await retrieval.retrieve(
+        store=FakeVectorStore(dense_hits=[_hit_id(hit, doc, 5, 0.9)], sparse_hits=[]),
+        reranker=_TextScoredReranker({"mid": 1.0}),
+        fetch_chunks=_fetcher([_record(hit, doc, 5, "mid")]),
+        fetch_neighbors=_neighbor_fetcher(neighbors, calls),
+        tenant_id=tenant,
+        query="q",
+        expand="neighbors",
+    )
+
+    assert [n.text for n in result.items[0].neighbors] == ["before", "after"]
+    assert calls == [(tenant, [(doc, 4), (doc, 6)])]
+
+
+@pytest.mark.asyncio
+async def test_neighbor_expansion_skips_index_minus_one_and_missing_neighbors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    tenant, doc, hit = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]] = []
+
+    result = await retrieval.retrieve(
+        store=FakeVectorStore(dense_hits=[_hit_id(hit, doc, 0, 0.9)], sparse_hits=[]),
+        reranker=_TextScoredReranker({"first": 1.0}),
+        fetch_chunks=_fetcher([_record(hit, doc, 0, "first")]),
+        fetch_neighbors=_neighbor_fetcher([], calls),
+        tenant_id=tenant,
+        query="q",
+        expand="neighbors",
+    )
+
+    # Chunk 0 has no predecessor; chunk 1 doesn't exist (single-chunk document).
+    assert calls == [(tenant, [(doc, 1)])]
+    assert result.items[0].neighbors == ()
+
+
+@pytest.mark.asyncio
+async def test_neighbor_expansion_omits_neighbors_that_are_results_themselves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    c4, c5 = uuid.uuid4(), uuid.uuid4()
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]] = []
+    records = [_record(c4, doc, 4, "four"), _record(c5, doc, 5, "five")]
+
+    result = await retrieval.retrieve(
+        store=FakeVectorStore(
+            dense_hits=[_hit_id(c5, doc, 5, 0.9), _hit_id(c4, doc, 4, 0.8)],
+            sparse_hits=[],
+        ),
+        reranker=_TextScoredReranker({"four": 0.1, "five": 0.9}),
+        fetch_chunks=_fetcher(records),
+        fetch_neighbors=_neighbor_fetcher(records, calls),
+        tenant_id=tenant,
+        query="q",
+        expand="neighbors",
+    )
+
+    # 4 and 5 are both returned, so neither repeats as the other's neighbor, and
+    # neither is fetched again.
+    assert calls == [(tenant, [(doc, 3), (doc, 6)])]
+    assert [item.neighbors for item in result.items] == [(), ()]
+
+
+@pytest.mark.asyncio
+async def test_neighbor_expansion_is_timed_in_the_trace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    doc, c1 = uuid.uuid4(), uuid.uuid4()
+
+    result = await retrieval.retrieve(
+        store=FakeVectorStore(dense_hits=[_hit_id(c1, doc, 1, 0.9)], sparse_hits=[]),
+        reranker=_TextScoredReranker({"mid": 1.0}),
+        fetch_chunks=_fetcher([_record(c1, doc, 1, "mid")]),
+        fetch_neighbors=_neighbor_fetcher([], []),
+        tenant_id=uuid.uuid4(),
+        query="q",
+        expand="neighbors",
+        trace=True,
+    )
+
+    assert result.trace is not None
+    assert "expand" in {stage.name for stage in result.trace.stages}
+
+
+@pytest.mark.asyncio
+async def test_neighbor_expansion_without_a_neighbor_fetcher_is_an_error() -> None:
+    with pytest.raises(ValueError, match="fetch_neighbors"):
+        await retrieval.retrieve(
+            store=FakeVectorStore(dense_hits=[], sparse_hits=[]),
+            reranker=_TextScoredReranker({}),
+            fetch_chunks=_fetcher([]),
+            tenant_id=uuid.uuid4(),
+            query="q",
+            expand="neighbors",
+        )
+
+
+@pytest.mark.asyncio
+async def test_neighbor_keys_are_ordered_numerically_by_chunk_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fixed_embed_query(monkeypatch)
+    tenant, doc, hit = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    calls: list[tuple[uuid.UUID, list[tuple[uuid.UUID, int]]]] = []
+
+    await retrieval.retrieve(
+        store=FakeVectorStore(dense_hits=[_hit_id(hit, doc, 10, 0.9)], sparse_hits=[]),
+        reranker=_TextScoredReranker({"ten": 1.0}),
+        fetch_chunks=_fetcher([_record(hit, doc, 10, "ten")]),
+        fetch_neighbors=_neighbor_fetcher([], calls),
+        tenant_id=tenant,
+        query="q",
+        expand="neighbors",
+    )
+
+    # 9 before 11 (a string sort would put "11" first).
+    assert calls == [(tenant, [(doc, 9), (doc, 11)])]

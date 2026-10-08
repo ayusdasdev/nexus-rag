@@ -33,3 +33,17 @@ def test_settings_offer_no_client_supplied_tenant_header() -> None:
     """tenant_id comes only from the token (CLAUDE.md); a configurable tenant header
     would invite reading it from the request instead."""
     assert not any("tenant" in name for name in Settings.model_fields)
+
+
+def test_retrieval_switch_defaults() -> None:
+    settings = Settings()
+
+    assert settings.retrieval_mode == "hybrid"
+    assert settings.rerank is True
+    assert settings.candidates == 40
+    assert settings.expand == "none"
+
+
+def test_retrieval_mode_rejects_an_unknown_value() -> None:
+    with pytest.raises(ValueError, match="retrieval_mode"):
+        Settings(retrieval_mode="keyword")
