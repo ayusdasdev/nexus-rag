@@ -230,11 +230,13 @@ dependency).
   `make test-int` after wiring: 258 passed.
 - [ ] 7.2 Optional `Idempotency-Key` on `POST /v1/documents`: deferred (upload already dedups by
   content hash; low value, see `docs/api-audit.md` item 8).
-- [ ] 7.3 OpenAPI pass: tags, summaries, examples, error responses, unique operation_ids. Export
-  `openapi.json`.
-- [ ] 7.4 `cli/nexus_cli.py` (typer + httpx): login, upload --wait, docs, search, ask
-  (SSE), history. Token stored in `~/.nexus/config.json` with mode 0600. Pure SSE-line parser
-  tests. New dep: `typer`.
+- [x] 7.3 OpenAPI pass (`4118d54`): problem+json error responses everywhere, explicit camelCase
+  operation ids, SSE event schemas in components, unversioned auth hidden from the docs;
+  `make openapi` -> `docs/openapi.json` with a staleness test and a $ref-resolution test.
+  Postman import not run (not possible from here).
+- [x] 7.4 `cli/nexus_cli.py` (`b455019`), argparse + httpx (your choice; no new dependency):
+  login, logout, upload --wait, docs, search, ask (SSE), history. Token 0600 in a 0700 dir,
+  refused if loose, bound to its API URL, https or loopback only, never printed.
 
 ## M8: Evaluation and tuning
 
