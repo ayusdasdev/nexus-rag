@@ -1,0 +1,228 @@
+"""/v1/conversations: create, list, get, messages (SSE) and delete, for the owner.
+
+Ownership across users and tenants is in test_conversations_idor.py.
+"""
+
+import json
+import uuid
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+import pytest
+from httpx import AsyncClient, Response
+
+from app.core.config import Settings, get_settings
+from app.main import app
+from app.providers.llm import FakeLLM
+from tests.conftest import Caller
+
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
+
+NewTenant = Callable[[], Awaitable[Caller]]
+Q1 = "How long does charging take?"
+Q2 = "And how do I calibrate it?"
+
+
+def _events(response: Response) -> list[tuple[str, dict[str, Any]]]:
+    events = []
+    for frame in response.text.split("\n\n"):
+        if frame.strip():
+            lines = dict(line.split(": ", 1) for line in frame.split("\n"))
+            events.append((lines["event"], json.loads(lines["data"])))
+    return events
+
+
+async def _create(
+    client: AsyncClient, caller: Caller, title: str | None = "Charging"
+) -> str:
+    response = await client.post(
+        "/v1/conversations", headers=caller.headers, json={"title": title}
+    )
+    assert response.status_code == 201, response.text
+    return str(response.json()["id"])
+
+
+async def test_create_returns_201_with_the_conversation(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+
+    response = await client.post(
+        "/v1/conversations", headers=caller.headers, json={"title": "Charging"}
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert set(body) == {"id", "title", "created_at"}
+    assert body["title"] == "Charging"
+
+
+async def test_create_without_a_title_is_allowed(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+
+    response = await client.post("/v1/conversations", headers=caller.headers, json={})
+
+    assert response.status_code == 201
+    assert response.json()["title"] is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"title": "x" * 201},
+        {"title": "ok", "tenant_id": str(uuid.uuid4())},
+        {"title": "ok", "user_id": str(uuid.uuid4())},
+    ],
+    ids=["title-too-long", "tenant-id", "user-id"],
+)
+async def test_create_with_an_invalid_body_is_422(
+    client: AsyncClient, new_tenant: NewTenant, body: dict[str, Any]
+) -> None:
+    caller = await new_tenant()
+
+    response = await client.post("/v1/conversations", headers=caller.headers, json=body)
+
+    assert response.status_code == 422
+
+
+async def test_list_is_paginated_newest_first(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+    ids = [await _create(client, caller, f"c{n}") for n in range(3)]
+
+    page = await client.get(
+        "/v1/conversations", headers=caller.headers, params={"limit": 2, "offset": 0}
+    )
+    rest = await client.get(
+        "/v1/conversations", headers=caller.headers, params={"limit": 2, "offset": 2}
+    )
+
+    assert page.status_code == 200
+    assert [c["id"] for c in page.json()["items"]] == [ids[2], ids[1]]
+    assert page.json()["total"] == 3
+    assert [c["id"] for c in rest.json()["items"]] == [ids[0]]
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+async def test_list_with_bad_paging_is_422(
+    client: AsyncClient, new_tenant: NewTenant, params: dict[str, int]
+) -> None:
+    caller = await new_tenant()
+
+    response = await client.get(
+        "/v1/conversations", headers=caller.headers, params=params
+    )
+
+    assert response.status_code == 422
+
+
+async def test_a_turn_streams_like_chat_and_persists_both_messages(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    caller = await new_tenant()
+    conversation_id = await _create(client, caller)
+    url = f"/v1/conversations/{conversation_id}"
+
+    response = await client.post(
+        f"{url}/messages", headers=caller.headers, json={"question": Q1}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["cache-control"] == "no-cache"
+    events = _events(response)
+    assert [name for name, _ in events] == [
+        "sources",
+        "token",
+        "token",
+        "citations",
+        "done",
+    ]
+    # First turn: nothing to rewrite, so retrieval used the question itself.
+    assert events[0][1]["rewritten_query"] == Q1
+    assert events[-1][1]["answer"] == "Two hours [1]."
+
+    detail = (await client.get(url, headers=caller.headers)).json()
+    user, assistant = detail["messages"]
+    assert (user["role"], user["content"]) == ("user", Q1)
+    assert (assistant["role"], assistant["content"]) == ("assistant", "Two hours [1].")
+    assert assistant["rewritten_query"] == Q1
+    assert assistant["model"] == "fake"
+    assert assistant["truncated"] is False
+    assert assistant["sources"] and all("text" not in s for s in assistant["sources"])
+    assert {s["chunk_id"] for s in assistant["sources"]} <= set(caller.chunk_ids)
+
+
+async def test_the_second_turn_is_rewritten_by_rule_and_sees_the_history(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}/messages"
+    await client.post(url, headers=caller.headers, json={"question": Q1})
+
+    second = await client.post(url, headers=caller.headers, json={"question": Q2})
+
+    assert _events(second)[0][1]["rewritten_query"] == f"{Q1} {Q2}"
+    prompt = fake_llm.calls[-1]
+    assert [m.role for m in prompt] == ["system", "user", "assistant", "user"]
+    assert prompt[1].content == Q1
+    assert prompt[2].content == "Two hours [1]."
+    assert f"<question>\n{Q2}\n</question>" in prompt[3].content
+
+
+async def test_rewrite_mode_off_retrieves_with_the_question_as_is(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}/messages"
+    await client.post(url, headers=caller.headers, json={"question": Q1})
+    app.dependency_overrides[get_settings] = lambda: Settings(rewrite_mode="off")
+    try:
+        second = await client.post(url, headers=caller.headers, json={"question": Q2})
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert _events(second)[0][1]["rewritten_query"] == Q2
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"question": ""}, {"question": Q1, "tenant_id": str(uuid.uuid4())}],
+    ids=["missing", "empty", "tenant-id"],
+)
+async def test_a_message_with_an_invalid_body_is_422_and_saves_nothing(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM, body: dict[str, Any]
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+
+    response = await client.post(f"{url}/messages", headers=caller.headers, json=body)
+
+    assert response.status_code == 422
+    assert (await client.get(url, headers=caller.headers)).json()["messages"] == []
+    assert fake_llm.calls == []
+
+
+async def test_delete_returns_204_and_the_conversation_is_gone(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+
+    response = await client.delete(url, headers=caller.headers)
+
+    assert response.status_code == 204
+    assert (await client.get(url, headers=caller.headers)).status_code == 404
+
+
+async def test_a_malformed_conversation_id_is_422(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+
+    response = await client.get("/v1/conversations/not-a-uuid", headers=caller.headers)
+
+    assert response.status_code == 422
