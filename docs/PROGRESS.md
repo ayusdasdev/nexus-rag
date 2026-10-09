@@ -210,8 +210,9 @@ dependency).
 
 - [x] 7.1 API audit in-session from `app.openapi()` and the routers: 9 findings and an ordered
   plan with risks in `docs/api-audit.md`.
-- [ ] 7.2 RFC 9457 problem+json handlers and request-id middleware (contextvar, echoed
-  `X-Request-ID`, 500 without stack trace).
+- [x] 7.2 RFC 9457 problem+json handlers and request-id middleware (`b10c839`): every 4xx/5xx
+  incl. unknown routes and unhandled errors; safe incoming ids echoed, others replaced; ids
+  on every log record; 422s list errors without echoing input.
 - [ ] 7.2 Cursor pagination (opaque, tenant-scoped, invalid cursor gives 422, capped limit) on
   documents, chunks and conversations.
 - [ ] 7.2 Per-tenant Redis token-bucket rate limiter (reads vs `/chat`), 429 + `Retry-After` +
