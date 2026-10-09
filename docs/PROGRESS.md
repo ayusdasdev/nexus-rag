@@ -160,11 +160,13 @@ history shares `MAX_CONTEXT_TOKENS` (2500), capped at `HISTORY_MAX_TOKENS=500`, 
 first; conversations are owner-only (admins get 404 too).
 
 
-- [ ] 6.1 New migration: `conversations`, `messages` (index `(conversation_id, created_at)`).
-  Repositories scoped by `tenant_id` AND `user_id`.
-- [ ] 6.2 `app/services/rewriting.py`: `rewrite_query` (skip on first turn; fall back on empty or
-  >3x-length output; prompt in `app/prompts/rewrite.md`) and `trim_history(messages, max_tokens)`.
-  Tests use FakeLLM.
+- [x] 6.1 Migration `7043f21d7f44` (new file; read back, 2 risks fixed: enum dropped on
+  downgrade, composite FK so a message can't name another tenant) and a repository scoped by
+  `tenant_id` AND `user_id` (`2413ceb`, `8cb2fc5`). Ownership tests written first; removing
+  either the user_id or the tenant_id condition fails 4 tests each.
+- [x] 6.2 `rewriting.py`: `trim_history` and `rewrite_query` with `REWRITE_MODE=rule|llm|off`,
+  prompt in `app/prompts/rewrite.md`, FakeLLM tests (`c2561da`, `be8d156`, ADR-0009). Deviation
+  from the guide: the overlong limit is 3x (previous + current question), not 3x the question.
 - [ ] 6.3 Five conversation endpoints. The messages endpoint reuses the M5 chat pipeline
   (shared service), persists the user message first and the assistant message on completion
   (`truncated=true` on disconnect), and puts `rewritten_query` in the `sources` event.
