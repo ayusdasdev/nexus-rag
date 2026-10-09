@@ -128,9 +128,14 @@ async def delete_conversation(
 
 
 async def list_messages(
-    tenant_id: UUID, user_id: UUID, conversation_id: UUID
+    tenant_id: UUID,
+    user_id: UUID,
+    conversation_id: UUID,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[MessageRecord] | None:
-    """Messages of the caller's conversation, oldest first. None if not theirs."""
+    """Messages of the caller's conversation, oldest first, optionally one page of them.
+    None if not theirs."""
     async with session_scope() as session:
         owned = await session.scalar(
             select(Conversation.id).where(*_owned(tenant_id, user_id, conversation_id))
@@ -144,6 +149,8 @@ async def list_messages(
                 Message.tenant_id == tenant_id,
             )
             .order_by(Message.created_at, Message.id)
+            .limit(limit)
+            .offset(offset)
         )
         return [_message(row) for row in result.scalars().all()]
 
@@ -183,3 +190,81 @@ async def add_message(
         await session.commit()
         await session.refresh(row)
         return _message(row)
+
+
+async def count_messages(
+    tenant_id: UUID, user_id: UUID, conversation_id: UUID
+) -> int | None:
+    """How many messages the caller's conversation has. None if not theirs."""
+    async with session_scope() as session:
+        owned = await session.scalar(
+            select(Conversation.id).where(*_owned(tenant_id, user_id, conversation_id))
+        )
+        if owned is None:
+            return None
+        count = await session.scalar(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.tenant_id == tenant_id,
+            )
+        )
+        return int(count or 0)
+
+
+async def count_conversations(tenant_id: UUID, user_id: UUID) -> int:
+    async with session_scope() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(Conversation)
+            .where(Conversation.tenant_id == tenant_id, Conversation.user_id == user_id)
+        )
+        return int(count or 0)
+
+
+async def recent_history(
+    tenant_id: UUID, user_id: UUID, conversation_id: UUID, limit: int
+) -> list[MessageRecord] | None:
+    """The newest `limit` messages, oldest first, for building history: a bounded load,
+    and without the sources/usage JSON (returned as None). None if not theirs."""
+    async with session_scope() as session:
+        owned = await session.scalar(
+            select(Conversation.id).where(*_owned(tenant_id, user_id, conversation_id))
+        )
+        if owned is None:
+            return None
+        result = await session.execute(
+            select(
+                Message.id,
+                Message.conversation_id,
+                Message.role,
+                Message.content,
+                Message.rewritten_query,
+                Message.model,
+                Message.truncated,
+                Message.created_at,
+            )
+            .where(
+                Message.conversation_id == conversation_id,
+                Message.tenant_id == tenant_id,
+            )
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(limit)
+        )
+        rows = list(result.all())
+    return [
+        MessageRecord(
+            id=row.id,
+            conversation_id=row.conversation_id,
+            role=row.role.value,
+            content=row.content,
+            sources=None,
+            rewritten_query=row.rewritten_query,
+            model=row.model,
+            usage=None,
+            truncated=row.truncated,
+            created_at=row.created_at,
+        )
+        for row in reversed(rows)
+    ]

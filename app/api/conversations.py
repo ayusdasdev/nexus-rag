@@ -35,6 +35,15 @@ from app.services.rewriting import rewrite_query, trim_history
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
+# History is trimmed by tokens; this only bounds how many rows are read to do that.
+HISTORY_LOAD_MESSAGES = 50
+
+
+def _limit_reached(what: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT, detail=f"{what} limit reached"
+    )
+
 
 def not_found() -> HTTPException:
     """One response for "not yours" and "doesn't exist", so existence never leaks
@@ -73,8 +82,15 @@ async def create_conversation(
     body: ConversationCreate,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
 ) -> ConversationOut:
-    """Create a conversation owned by the caller. Only they will ever see it."""
+    """Create a conversation owned by the caller. Only they will ever see it. 409 past
+    MAX_CONVERSATIONS_PER_USER."""
+    if (
+        await conversation_repository.count_conversations(tenant_id, user.id)
+        >= settings.max_conversations_per_user
+    ):
+        raise _limit_reached("Conversation")
     record = await conversation_repository.create_conversation(
         tenant_id, user.id, body.title
     )
@@ -105,6 +121,8 @@ async def list_conversations(
 )
 async def get_conversation(
     conversation_id: UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
 ) -> ConversationDetail:
@@ -113,12 +131,17 @@ async def get_conversation(
         tenant_id, user.id, conversation_id
     )
     messages = await conversation_repository.list_messages(
+        tenant_id, user.id, conversation_id, limit=limit, offset=offset
+    )
+    total = await conversation_repository.count_messages(
         tenant_id, user.id, conversation_id
     )
-    if record is None or messages is None:
+    if record is None or messages is None or total is None:
         raise not_found()
     return ConversationDetail(
-        **_out(record).model_dump(), messages=[_message_out(m) for m in messages]
+        **_out(record).model_dump(),
+        messages=[_message_out(m) for m in messages],
+        messages_total=total,
     )
 
 
@@ -154,11 +177,17 @@ async def post_message(
     assistant message is saved when the stream ends: the cleaned answer, or the partial
     text with truncated=true after an error or a disconnect.
     """
-    earlier = await conversation_repository.list_messages(
+    count = await conversation_repository.count_messages(
         tenant_id, user.id, conversation_id
     )
-    if earlier is None:
+    earlier = await conversation_repository.recent_history(
+        tenant_id, user.id, conversation_id, limit=HISTORY_LOAD_MESSAGES
+    )
+    if count is None or earlier is None:
         raise not_found()
+    # A turn adds two messages; refuse before writing anything.
+    if count + 2 > settings.conversation_max_messages:
+        raise _limit_reached("Conversation message")
     history = trim_history(history_turns(earlier), settings.history_max_tokens)
     await conversation_repository.add_message(
         tenant_id,

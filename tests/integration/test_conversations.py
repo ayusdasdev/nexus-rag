@@ -226,3 +226,76 @@ async def test_a_malformed_conversation_id_is_422(
     response = await client.get("/v1/conversations/not-a-uuid", headers=caller.headers)
 
     assert response.status_code == 422
+
+
+# --- M6 review, MEDIUM-3: pagination and caps -------------------------------------
+
+
+async def test_get_pages_messages_and_reports_their_total(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+    await client.post(f"{url}/messages", headers=caller.headers, json={"question": Q1})
+
+    page = await client.get(
+        url, headers=caller.headers, params={"limit": 1, "offset": 1}
+    )
+
+    assert page.status_code == 200
+    assert [m["role"] for m in page.json()["messages"]] == ["assistant"]
+    assert page.json()["messages_total"] == 2
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 501}, {"offset": -1}])
+async def test_get_with_bad_message_paging_is_422(
+    client: AsyncClient, new_tenant: NewTenant, params: dict[str, int]
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+
+    assert (
+        await client.get(url, headers=caller.headers, params=params)
+    ).status_code == 422
+
+
+async def test_a_conversation_at_its_message_cap_refuses_a_turn_with_409(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        conversation_max_messages=2
+    )
+    try:
+        first = await client.post(
+            f"{url}/messages", headers=caller.headers, json={"question": Q1}
+        )
+        calls = len(fake_llm.calls)
+        second = await client.post(
+            f"{url}/messages", headers=caller.headers, json={"question": Q2}
+        )
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert len(fake_llm.calls) == calls
+    assert (await client.get(url, headers=caller.headers)).json()["messages_total"] == 2
+
+
+async def test_a_user_at_the_conversation_cap_gets_409_on_create(
+    client: AsyncClient, new_tenant: NewTenant
+) -> None:
+    caller = await new_tenant()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        max_conversations_per_user=1
+    )
+    try:
+        first = await client.post("/v1/conversations", headers=caller.headers, json={})
+        second = await client.post("/v1/conversations", headers=caller.headers, json={})
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert first.status_code == 201
+    assert second.status_code == 409

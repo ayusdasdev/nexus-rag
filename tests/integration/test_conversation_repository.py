@@ -286,3 +286,77 @@ async def test_a_message_without_sources_or_usage_stores_sql_null_not_json_null(
         ).one()
 
     assert tuple(row) == (True, True)
+
+
+# --- M6 review, MEDIUM-3: bounded loads -------------------------------------------
+
+
+async def _with_messages(n: int) -> tuple[UUID, UUID, UUID]:
+    tenant, owner = await _tenant_user()
+    mine = await conversation_repository.create_conversation(tenant, owner, None)
+    for i in range(n):
+        await conversation_repository.add_message(
+            tenant,
+            owner,
+            mine.id,
+            role=MessageRole.user if i % 2 == 0 else MessageRole.assistant,
+            content=f"m{i}",
+            sources=[{"number": 1}] if i % 2 else None,
+        )
+    return tenant, owner, mine.id
+
+
+async def test_recent_history_returns_the_newest_n_oldest_first_without_sources() -> (
+    None
+):
+    tenant, owner, conversation_id = await _with_messages(5)
+
+    recent = await conversation_repository.recent_history(
+        tenant, owner, conversation_id, limit=3
+    )
+
+    assert recent is not None
+    assert [m.content for m in recent] == ["m2", "m3", "m4"]
+    assert all(m.sources is None for m in recent)
+
+
+async def test_recent_history_of_someone_elses_conversation_is_none() -> None:
+    tenant, _owner, conversation_id = await _with_messages(2)
+    other = await _second_user(tenant)
+
+    assert (
+        await conversation_repository.recent_history(
+            tenant, other, conversation_id, limit=10
+        )
+        is None
+    )
+
+
+async def test_list_messages_pages_and_count_messages_counts_only_my_own() -> None:
+    tenant, owner, conversation_id = await _with_messages(5)
+    other = await _second_user(tenant)
+
+    page = await conversation_repository.list_messages(
+        tenant, owner, conversation_id, limit=2, offset=2
+    )
+
+    assert page is not None
+    assert [m.content for m in page] == ["m2", "m3"]
+    assert (
+        await conversation_repository.count_messages(tenant, owner, conversation_id)
+        == 5
+    )
+    assert (
+        await conversation_repository.count_messages(tenant, other, conversation_id)
+        is None
+    )
+
+
+async def test_count_conversations_counts_only_mine() -> None:
+    tenant, owner = await _tenant_user()
+    other = await _second_user(tenant)
+    for _ in range(2):
+        await conversation_repository.create_conversation(tenant, owner, None)
+    await conversation_repository.create_conversation(tenant, other, None)
+
+    assert await conversation_repository.count_conversations(tenant, owner) == 2

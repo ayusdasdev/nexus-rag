@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     # Conversations (ADR-0009): history shares max_context_tokens, capped at this.
     history_max_tokens: int = Field(default=500, ge=0)
     rewrite_mode: RewriteMode = "rule"
+    # Bounds on stored conversation data (M6 review, MEDIUM-3); past them, 409.
+    conversation_max_messages: int = Field(default=1000, ge=2)
+    max_conversations_per_user: int = Field(default=1000, ge=1)
     llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
 
     @model_validator(mode="after")

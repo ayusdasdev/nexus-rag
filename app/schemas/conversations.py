@@ -58,7 +58,10 @@ class MessageOut(BaseModel):
 
 
 class ConversationDetail(ConversationOut):
-    messages: list[MessageOut]
+    messages: list[MessageOut] = Field(
+        description="One page of messages, oldest first."
+    )
+    messages_total: int
 
 
 class ConversationMessageRequest(ChatRequest):
