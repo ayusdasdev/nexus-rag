@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.models.conversation import Message, MessageRole
+from app.models.conversation import Conversation, Message, MessageRole
 from app.models.user import User, UserRole
 from app.repositories import auth_repository, conversation_repository
 from app.repositories.session import session_scope
@@ -360,3 +360,17 @@ async def test_count_conversations_counts_only_mine() -> None:
     await conversation_repository.create_conversation(tenant, other, None)
 
     assert await conversation_repository.count_conversations(tenant, owner) == 2
+
+
+async def test_the_database_rejects_a_conversation_whose_user_is_in_another_tenant() -> (
+    None
+):
+    # M6 accepted low finding, fixed in M7: (user_id, tenant_id) must name a real user of
+    # that tenant, so a repository bug can't file a user's conversation under another tenant.
+    _tenant_a, user_a = await _tenant_user()
+    tenant_b, _user_b = await _tenant_user()
+
+    with pytest.raises(IntegrityError):
+        async with session_scope() as session:
+            session.add(Conversation(tenant_id=tenant_b, user_id=user_a, title="wrong"))
+            await session.commit()

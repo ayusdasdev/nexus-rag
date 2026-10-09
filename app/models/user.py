@@ -2,7 +2,16 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -15,7 +24,11 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (Index("ix_users_tenant_id", "tenant_id"),)
+    __table_args__ = (
+        Index("ix_users_tenant_id", "tenant_id"),
+        # Target of conversations' (user_id, tenant_id) FK.
+        UniqueConstraint("id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
