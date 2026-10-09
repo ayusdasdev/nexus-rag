@@ -123,8 +123,20 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   LLM calls. Tests: event order, newline in a token, refusal, invalid citation stripped,
   tenant isolation in `sources`, 401, 422 (incl. `tenant_id`), 503 without an LLM.
 - [ ] 5.5 Manual run against Ollama: answerable, unanswerable and poisoned documents. Report
-  observations as written.
-- [ ] security-reviewer subagent on the M5 diff; fix medium+ findings with tests.
+  observations as written. **Blocked:** Ollama isn't installed (sudo needs your password).
+- [x] security-reviewer subagent on `7d2986c..1f2b4e6`: 1 high, 3 medium, all fixed with tests
+  first (`951279c`, `3b108de`, `9e3fd25`):
+  - HIGH: quadratic citation regex (40k spaces: 9.25 s, measured) -> bounded, linear.
+  - MEDIUM: 5000-digit citation raised mid-stream -> citations are 1-4 digits.
+  - MEDIUM: no catch-all / total deadline / safe close -> generic error event,
+    `LLM_ANSWER_DEADLINE_SECONDS`, shielded `aclose()`.
+  - MEDIUM: cost exposure -> `CHAT_MAX_CONCURRENT_ANSWERS` busy cap now; the per-tenant quota
+    is the M7 7.2 rate limiter.
+  - Lows fixed: NaN/negative `retry-after`, https base URL in production, fullwidth and
+    zero-width tag lookalikes. Not fixed (info): one retry may double-bill if the first call
+    was processed; provider JSON error text isn't length-capped in logs.
+- [x] M5 checks (`9e3fd25`): `make lint` pass, `make test` **295 passed**, `make test-int`
+  **155 passed** (run alone, no Ollama model loaded, no 401).
 
 ## M6: Conversations, memory, query rewriting
 
