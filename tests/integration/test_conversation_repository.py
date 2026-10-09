@@ -263,3 +263,26 @@ async def test_my_user_id_under_another_tenant_reaches_nothing(operation: str) -
         is not None
     )
     assert await _message_count(mine.id) == 0
+
+
+async def test_a_message_without_sources_or_usage_stores_sql_null_not_json_null() -> (
+    None
+):
+    # Seen in the M6 6.5 run: None was stored as the JSON value null, so IS NULL missed it.
+    tenant, owner = await _tenant_user()
+    mine = await conversation_repository.create_conversation(tenant, owner, None)
+    added = await conversation_repository.add_message(
+        tenant, owner, mine.id, role=MessageRole.user, content="q"
+    )
+    assert added is not None
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(Message.sources.is_(None), Message.usage.is_(None)).where(
+                    Message.id == added.id
+                )
+            )
+        ).one()
+
+    assert tuple(row) == (True, True)

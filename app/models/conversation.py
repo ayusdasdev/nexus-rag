@@ -78,10 +78,15 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Assistant messages: the numbered sources sent, the retrieval query actually used,
     # which model answered, and token usage when the provider reports it.
-    sources: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # none_as_null: Python None is SQL NULL, not the JSON value null (found in M6 6.5).
+    sources: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     rewritten_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     truncated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=false()
     )
