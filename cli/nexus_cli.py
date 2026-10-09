@@ -252,7 +252,10 @@ def cmd_search(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
         result = _check(client.post("/v1/search", json=body)).json()
     for rank, hit in enumerate(result["items"], start=1):
         s.print(f"{rank}. ({hit['score']:.4f}) {hit.get('heading_path') or '-'}")
-        s.print(f"   {hit['text'][:300]}")
+        preview = " ".join(
+            hit["text"].split()
+        )  # chunk newlines would break the listing
+        s.print(f"   {preview[:300]}")
     if args.debug and result.get("trace"):
         stages = ", ".join(
             f"{st['name']} {st['ms']:.0f} ms" for st in result["trace"]["stages"]

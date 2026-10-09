@@ -477,3 +477,27 @@ def test_a_command_without_login_says_to_log_in(tmp_path: Path) -> None:
 
     assert code == 1
     assert "nexus login" in err
+
+
+def test_search_previews_stay_on_one_line(tmp_path: Path) -> None:
+    # Seen in the real run (docs/cli-demo.md): chunk newlines broke the listing.
+    server = Server(
+        {
+            ("POST", "/v1/search"): _json(
+                {
+                    "items": [
+                        {
+                            "score": 1.0,
+                            "heading_path": "Glossary",
+                            "text": "Widget. A sensor.\n\nHub. The gateway.",
+                        }
+                    ],
+                    "trace": None,
+                }
+            )
+        }
+    )
+
+    _, out, _ = _run(tmp_path, server, "search", "hub")
+
+    assert "   Widget. A sensor. Hub. The gateway." in out.splitlines()
