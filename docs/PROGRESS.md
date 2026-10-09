@@ -200,6 +200,14 @@ first; conversations are owner-only (admins get 404 too).
 
 ## M7: API polish and CLI
 
+Your decisions (2026-10-09): ADR-0009 accepted as written (3x rewrite rule), caps stay at
+1000. Rate limiter in **Redis**, token buckets **per tenant and per user** (user = half the
+tenant limits), keyed only from the verified token. Limits per tenant: chat (`/v1/chat` and
+conversation messages) 5 burst then 1/min; search 20 then 1/5 s; other routes 120 then 2/s.
+Fail closed on LLM routes and open on reads when Redis is down. CLI with **argparse** (no new
+dependency).
+
+
 - [ ] 7.1 API audit done in-session (not `claude -p`, to keep cost at zero), written to
   `docs/api-audit.md`.
 - [ ] 7.2 RFC 9457 problem+json handlers and request-id middleware (contextvar, echoed
