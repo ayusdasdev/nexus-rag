@@ -208,8 +208,8 @@ Fail closed on LLM routes and open on reads when Redis is down. CLI with **argpa
 dependency).
 
 
-- [ ] 7.1 API audit done in-session (not `claude -p`, to keep cost at zero), written to
-  `docs/api-audit.md`.
+- [x] 7.1 API audit in-session from `app.openapi()` and the routers: 9 findings and an ordered
+  plan with risks in `docs/api-audit.md`.
 - [ ] 7.2 RFC 9457 problem+json handlers and request-id middleware (contextvar, echoed
   `X-Request-ID`, 500 without stack trace).
 - [ ] 7.2 Cursor pagination (opaque, tenant-scoped, invalid cursor gives 422, capped limit) on
