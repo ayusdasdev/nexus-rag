@@ -1,4 +1,4 @@
-.PHONY: up down dev worker test test-int lint migrate fetch-models sample-docs
+.PHONY: up down dev worker test test-int lint migrate fetch-models sample-docs openapi
 
 up:
 	docker compose up -d
@@ -34,3 +34,6 @@ fetch-models:
 
 sample-docs:
 	uv run python scripts/make_sample_docs.py
+
+openapi:
+	uv run python scripts/export_openapi.py

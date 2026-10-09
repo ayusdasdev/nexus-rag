@@ -12,7 +12,12 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@router.get("/ready", response_model=ReadyResponse, summary="Readiness check")
+@router.get(
+    "/ready",
+    response_model=ReadyResponse,
+    summary="Readiness check",
+    responses={503: {"model": ReadyResponse, "description": "A dependency is down"}},
+)
 async def ready(
     response: Response,
     service: HealthService = Depends(get_health_service),  # noqa: B008 - FastAPI DI pattern

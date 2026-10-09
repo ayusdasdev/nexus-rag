@@ -29,7 +29,7 @@ spec doesn't list. All operations have a summary and a description.
 | POST | `/v1/documents` | yes | 202, 422 | 200 (dedup), 401, 413, 415, 503 | `tenant_id` from `current_user` |
 | GET | `/v1/documents` | yes | 200, 422 | 401 | offset pagination; `current_user.tenant_id` |
 | GET | `/v1/documents/{id}` | yes | 200, 422 | 401, 404 | `current_user.tenant_id` |
-| DELETE | `/v1/documents/{id}` | yes | 204, 422 | 401, 404 | `current_user.tenant_id` |
+| DELETE | `/v1/documents/{id}` | yes | 204, 422 | 401, 404, 503 | `current_user.tenant_id` |
 | GET | `/v1/documents/{id}/chunks` | yes | 200, 422 | 401, 404 | offset pagination |
 | POST | `/v1/search` | yes | 200, 422 | 401, 403 (debug), 500, 503 | |
 | POST | `/v1/chat` | yes | 200, 401, 422, 503 | 500 | SSE |
