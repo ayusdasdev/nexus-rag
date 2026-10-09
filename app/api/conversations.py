@@ -189,13 +189,16 @@ async def post_message(
     if count + 2 > settings.conversation_max_messages:
         raise _limit_reached("Conversation message")
     history = trim_history(history_turns(earlier), settings.history_max_tokens)
-    await conversation_repository.add_message(
+    saved = await conversation_repository.add_message(
         tenant_id,
         user.id,
         conversation_id,
         role=MessageRole.user,
         content=request.question,
     )
+    if saved is None:
+        # Deleted between the ownership check and the save: nothing to answer into.
+        raise not_found()
 
     query = await rewrite_query(
         history,

@@ -300,3 +300,29 @@ async def test_a_user_at_the_conversation_cap_gets_409_on_create(
 
     assert first.status_code == 201
     assert second.status_code == 409
+
+
+async def test_a_conversation_deleted_mid_request_is_404_not_an_orphan_answer(
+    client: AsyncClient,
+    new_tenant: NewTenant,
+    fake_llm: FakeLLM,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # M6 review, LOW-1: the ownership check passed, then the conversation vanished before
+    # the user turn was saved; nothing should be retrieved, generated or streamed.
+    from app.repositories import conversation_repository
+
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}"
+
+    async def vanished(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(conversation_repository, "add_message", vanished)
+
+    response = await client.post(
+        f"{url}/messages", headers=caller.headers, json={"question": Q1}
+    )
+
+    assert response.status_code == 404
+    assert fake_llm.calls == []

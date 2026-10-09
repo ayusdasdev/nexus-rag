@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 
 from app.models.conversation import Conversation, Message, MessageRole
 from app.repositories.session import session_scope
@@ -187,7 +188,11 @@ async def add_message(
             truncated=truncated,
         )
         session.add(row)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # The conversation was deleted after the ownership check (composite FK).
+            return None
         await session.refresh(row)
         return _message(row)
 
