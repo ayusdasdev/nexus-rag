@@ -403,3 +403,40 @@ it's the cross-encoder on this CPU, not memory pressure. Every other stage takes
   scaffolding from answers is a possible post-processing fix to test.
 - The injection was resisted in both runs where it was in context (Q2, Q3). Two runs prove
   nothing; the attack tests remain the guarantee (ADR-0007, layer 4).
+
+## M6 6.5: a two-turn conversation (2026-10-09)
+
+Same tenant and documents as above, `REWRITE_MODE=rule`, the new limits (Ollama timeout 300 s,
+deadline 420 s), model cold for turn 1. `POST /v1/conversations/{id}/messages`. Token frames
+are left out below (their text is in `done.answer`); every other frame is as printed.
+
+| Turn | `sources` at (s) | first `token` at (s) | tokens | total (s) |
+|---|---|---|---|---|
+| 1 `How long are readings kept at full resolution?` | 41.14 | 221.51 | 13 | 224.93 |
+| 2 `Can I export them?` | 52.03 | 124.90 | 27 | 131.76 |
+
+```text
+--- turn 1
+event: sources  rewritten_query = "How long are readings kept at full resolution?"
+   sources: [(1, 'Nexus Widgets Deployment Guide > 8. Data retention'), (2, None), (3, 'Nexus Widgets Deployment Guide > 5. Alerts > 5.2 Choosing durations'), (4, 'Nexus Widgets Deployment Guide > 5. Alerts > 5.1 Writing rules'), (5, 'Nexus Widgets Deployment Guide > 4. Calibration'), (6, 'Calibrating widgets > Temperature offsets')]
+event: citations
+data: {"citations": [{"number": 1, "chunk_id": "e3134255-4e3a-592e-b90d-4692841403ed", "document_id": "ae84066b-25be-49b5-be74-56f7ee08c6dc"}], "dropped": []}
+event: done
+data: {"answer": "Readings are kept for ninety days at full resolution [1].", "refused": false, "external_links": [], "skipped_chunks": 0}
+--- turn 2
+event: sources  rewritten_query = "How long are readings kept at full resolution? Can I export them?"
+   sources: [(1, 'Nexus Widgets Deployment Guide > 8. Data retention'), (2, 'Nexus Widgets > Command line'), (3, None), (4, 'Calibrating widgets > Temperature offsets'), (5, 'Nexus Widgets > License'), (6, 'Nexus Widgets Deployment Guide > 5. Alerts > 5.1 Writing rules')]
+event: citations
+data: {"citations": [{"number": 1, "chunk_id": "e3134255-4e3a-592e-b90d-4692841403ed", "document_id": "ae84066b-25be-49b5-be74-56f7ee08c6dc"}], "dropped": []}
+event: done
+data: {"answer": "Yes, you can export readings as CSV or JSON files, and these exports are available for thirty days after they are created [1].", "refused": false, "external_links": [], "skipped_chunks": 0}
+```
+
+- Turn 1 started cold and its first token came at 221.51 s, which is past the
+  old 120 s timeout: it completed only because of the 300 s Ollama timeout.
+- Turn 2's rule rewrite prefixed the previous question. Retrieval found Data retention (exports)
+  and the Command line section (`nexus readings export`), and the answer resolved "them" to
+  readings, with a valid `[1]`.
+- Persisted (read from Postgres): 4 messages in order; both answers with `model=llama3.2:3b`,
+  `truncated=false`, 6 sources each, no chunk text stored. The user rows had `sources` as JSON
+  `null` rather than SQL `NULL`, fixed afterwards (`none_as_null`).
