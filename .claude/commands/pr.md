@@ -1,6 +1,6 @@
 ---
 description: Draft a PR title and description from the commits on this branch (prints text only, never pushes)
-allowed-tools: Bash(git diff:*), Bash(git log:*)
+allowed-tools: Bash(git diff --stat master...HEAD), Bash(git log --oneline master..HEAD)
 ---
 Base branch: `master` (this repo's only branch; edit the two lines below for another base).
 
