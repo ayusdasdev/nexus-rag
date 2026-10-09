@@ -13,6 +13,7 @@ from fastapi import (
 
 from app.api.deps import CurrentUser, get_current_user
 from app.api.pagination import AFTER, index_key, page, time_cursor_key, time_key
+from app.api.rate_limit import limit_default
 from app.core.config import get_settings
 from app.core.errors import TransientError
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
@@ -35,7 +36,9 @@ from app.services.document_service import (
 )
 from app.workers.queue import CeleryTaskQueue
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(
+    prefix="/documents", tags=["documents"], dependencies=[Depends(limit_default)]
+)
 
 
 def get_task_queue() -> TaskQueue:

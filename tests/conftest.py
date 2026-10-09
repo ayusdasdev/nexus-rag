@@ -246,7 +246,31 @@ def new_member(client: AsyncClient) -> Callable[[Caller], Awaitable[Caller]]:
     return make
 
 
+@pytest.fixture(autouse=True)
+def _permissive_rate_limits(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Most tests aren't about rate limits; only tests marked real_rate_limit use Redis."""
+    if request.node.get_closest_marker("real_rate_limit"):
+        yield
+        return
+    from app.api.rate_limit import get_rate_limit_store
+    from app.services.rate_limiting import Decision
+
+    class _AllowAll:
+        async def take(self, *args: object, **kwargs: object) -> Decision:
+            return Decision(allowed=True, remaining=1.0, retry_after=0.0)
+
+    app.dependency_overrides[get_rate_limit_store] = lambda: _AllowAll()
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_rate_limit_store, None)
+
+
 def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "real_rate_limit: use the real Redis rate limiter, not the allow-all fake",
+    )
     config.addinivalue_line(
         "markers", "integration: needs local services or cached models"
     )

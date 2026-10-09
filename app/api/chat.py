@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_tenant_id
+from app.api.rate_limit import limit_chat
 from app.api.retrieval_errors import retrieval_errors
 from app.core.config import Settings, get_settings
 from app.providers.llm import LLMNotConfigured, LLMProvider
@@ -101,6 +102,7 @@ def sse_response(events: AsyncIterator[ChatEvent]) -> StreamingResponse:
 
 @router.post(
     "",
+    dependencies=[Depends(limit_chat)],
     summary="Answer a question from the tenant's documents (SSE stream)",
     response_class=StreamingResponse,
     responses={

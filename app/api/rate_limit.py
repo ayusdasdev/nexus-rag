@@ -1,0 +1,79 @@
+"""Rate-limit dependencies (M7): per-tenant and per-user token buckets in Redis.
+
+Keys come only from the verified token (tenant_id, user id), never from IP or forwarding
+headers, so a client can't move itself to a fresh bucket. Runs after authentication: an
+unauthenticated request is a 401 and spends nothing. With Redis down, chat (LLM cost) fails
+closed with 503 and every other class fails open.
+"""
+
+import logging
+import math
+from collections.abc import Awaitable, Callable
+from functools import lru_cache
+
+from fastapi import Depends, HTTPException, status
+
+from app.api.deps import CurrentUser, get_current_user
+from app.core.config import Settings, get_settings
+from app.core.redis import get_redis_client
+from app.repositories.rate_limit_store import (
+    RateLimiterUnavailable,
+    RedisRateLimitStore,
+)
+from app.services.rate_limiting import LimitClass, buckets_for
+
+logger = logging.getLogger(__name__)
+
+# A bucket that never refills would say "retry in infinity"; tell the client one day.
+_MAX_RETRY_AFTER = 86400
+
+
+@lru_cache
+def get_rate_limit_store() -> RedisRateLimitStore:
+    return RedisRateLimitStore(get_redis_client())
+
+
+def _number(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def rate_limited(kind: LimitClass) -> Callable[..., Awaitable[None]]:
+    async def check(
+        user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+        settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
+        store: RedisRateLimitStore = Depends(get_rate_limit_store),  # noqa: B008
+    ) -> None:
+        if not settings.rate_limit_enabled:
+            return
+        tenant_bucket, user_bucket = buckets_for(kind, settings)
+        keys = [f"rl:{kind}:tenant:{user.tenant_id}", f"rl:{kind}:user:{user.id}"]
+        try:
+            decision = await store.take(keys, [tenant_bucket, user_bucket])
+        except RateLimiterUnavailable as exc:
+            if kind == "chat":
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Rate limiting is unavailable; try again later",
+                ) from exc
+            logger.warning("rate limiter unavailable (%s); allowing %s", exc, kind)
+            return
+        if not decision.allowed:
+            retry = decision.retry_after
+            retry_after = _MAX_RETRY_AFTER if math.isinf(retry) else math.ceil(retry)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded",
+                headers={
+                    "Retry-After": str(min(retry_after, _MAX_RETRY_AFTER)),
+                    "X-RateLimit-Limit": _number(tenant_bucket.capacity),
+                    "X-RateLimit-Remaining": "0",
+                },
+            )
+
+    check.__name__ = f"rate_limited_{kind}"
+    return check
+
+
+limit_chat = rate_limited("chat")
+limit_search = rate_limited("search")
+limit_default = rate_limited("default")

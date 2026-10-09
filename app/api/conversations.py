@@ -14,6 +14,7 @@ from app.api.chat import (
 )
 from app.api.deps import CurrentUser, get_current_user, get_tenant_id
 from app.api.pagination import AFTER, page, time_cursor_key, time_key
+from app.api.rate_limit import limit_chat, limit_default
 from app.core.config import Settings, get_settings
 from app.models.conversation import MessageRole
 from app.providers.llm import LLMProvider
@@ -77,6 +78,7 @@ def _message_out(record: MessageRecord) -> MessageOut:
     "",
     response_model=ConversationOut,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_default)],
     summary="Start a conversation",
 )
 async def create_conversation(
@@ -98,7 +100,12 @@ async def create_conversation(
     return _out(record)
 
 
-@router.get("", response_model=ConversationList, summary="List my conversations")
+@router.get(
+    "",
+    response_model=ConversationList,
+    dependencies=[Depends(limit_default)],
+    summary="List my conversations",
+)
 async def list_conversations(
     limit: int = Query(default=20, ge=1, le=100),
     after: str | None = AFTER,
@@ -125,6 +132,7 @@ async def list_conversations(
 @router.get(
     "/{conversation_id}",
     response_model=ConversationDetail,
+    dependencies=[Depends(limit_default)],
     summary="Get one of my conversations with its messages",
     responses={404: {"description": "Not found, or not yours (indistinguishable)"}},
 )
@@ -168,6 +176,7 @@ async def get_conversation(
 
 @router.post(
     "/{conversation_id}/messages",
+    dependencies=[Depends(limit_chat)],
     summary="Ask a follow-up in one of my conversations (SSE stream)",
     response_class=StreamingResponse,
     responses={
@@ -265,6 +274,7 @@ async def post_message(
 @router.delete(
     "/{conversation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(limit_default)],
     summary="Delete one of my conversations and its messages",
     responses={404: {"description": "Not found, or not yours (indistinguishable)"}},
 )

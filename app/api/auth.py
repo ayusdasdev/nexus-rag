@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentUser, get_current_user
+from app.api.rate_limit import limit_default
 from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse, UserProfile
 from app.services.auth_service import (
     AuthService,
@@ -67,7 +68,12 @@ async def login(
     )
 
 
-@router.get("/me", response_model=UserProfile, summary="Get the current user's profile")
+@router.get(
+    "/me",
+    response_model=UserProfile,
+    dependencies=[Depends(limit_default)],
+    summary="Get the current user's profile",
+)
 async def me(
     current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
 ) -> UserProfile:

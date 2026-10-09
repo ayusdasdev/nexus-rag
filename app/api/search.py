@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentUser, get_current_user, get_tenant_id
+from app.api.rate_limit import limit_search
 from app.api.retrieval_errors import retrieval_errors
 from app.core.config import Settings, get_settings
 from app.models.user import UserRole
@@ -42,7 +43,12 @@ def _to_trace_response(trace: Trace) -> TraceResponse:
     )
 
 
-@router.post("", response_model=SearchResponse, summary="Search the tenant's chunks")
+@router.post(
+    "",
+    response_model=SearchResponse,
+    dependencies=[Depends(limit_search)],
+    summary="Search the tenant's chunks",
+)
 async def search(
     request: SearchRequest,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
