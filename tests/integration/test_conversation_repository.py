@@ -107,7 +107,7 @@ async def test_listing_returns_only_my_conversations_newest_first() -> None:
     )
 
     records, total = await conversation_repository.list_conversations(
-        tenant, me, limit=10, offset=0
+        tenant, me, limit=10
     )
 
     assert [r.id for r in records] == [second.id, first.id]
@@ -336,11 +336,20 @@ async def test_list_messages_pages_and_count_messages_counts_only_my_own() -> No
     tenant, owner, conversation_id = await _with_messages(5)
     other = await _second_user(tenant)
 
+    first = await conversation_repository.list_messages(
+        tenant, owner, conversation_id, limit=2
+    )
+    assert first is not None
     page = await conversation_repository.list_messages(
-        tenant, owner, conversation_id, limit=2, offset=2
+        tenant,
+        owner,
+        conversation_id,
+        limit=2,
+        after=(first[-1].created_at, first[-1].id),
     )
 
     assert page is not None
+    assert [m.content for m in first] == ["m0", "m1"]
     assert [m.content for m in page] == ["m2", "m3"]
     assert (
         await conversation_repository.count_messages(tenant, owner, conversation_id)

@@ -373,7 +373,9 @@ async def test_list_documents_paginates_newest_first(
 
     first = await client.get("/v1/documents", params={"limit": 2}, headers=_auth(token))
     second = await client.get(
-        "/v1/documents", params={"limit": 2, "offset": 2}, headers=_auth(token)
+        "/v1/documents",
+        params={"limit": 2, "after": first.json()["next_cursor"]},
+        headers=_auth(token),
     )
 
     assert first.status_code == 200
@@ -381,6 +383,7 @@ async def test_list_documents_paginates_newest_first(
     assert body["total"] == 3
     assert len(body["items"]) == 2
     assert len(second.json()["items"]) == 1
+    assert second.json()["next_cursor"] is None
     created = [item["created_at"] for item in body["items"]]
     assert created == sorted(created, reverse=True)
 
@@ -399,7 +402,9 @@ async def test_list_documents_is_scoped_to_the_tenant(
     assert response.json()["total"] == 0
 
 
-@pytest.mark.parametrize("query", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+@pytest.mark.parametrize(
+    "query", [{"limit": 0}, {"limit": 101}, {"after": "not-a-cursor"}]
+)
 async def test_list_documents_rejects_out_of_range_pagination(
     client: AsyncClient, queue: FakeTaskQueue, blob_root: Path, query: dict[str, int]
 ) -> None:

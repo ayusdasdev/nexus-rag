@@ -2,6 +2,7 @@ import asyncio
 import dataclasses
 import hashlib
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Protocol
 from uuid import UUID
@@ -148,16 +149,21 @@ class DocumentService:
         return document
 
     async def list_documents(
-        self, *, tenant_id: UUID, limit: int, offset: int
+        self, *, tenant_id: UUID, limit: int, after: tuple[datetime, UUID] | None = None
     ) -> tuple[list[DocumentRecord], int]:
-        return await document_repository.list_documents(tenant_id, limit, offset)
+        return await document_repository.list_documents(tenant_id, limit, after)
 
     async def list_chunks(
-        self, *, tenant_id: UUID, document_id: UUID, limit: int, offset: int
+        self,
+        *,
+        tenant_id: UUID,
+        document_id: UUID,
+        limit: int,
+        after: int | None = None,
     ) -> tuple[list[ChunkRecord], int]:
         if await document_repository.get_by_id(tenant_id, document_id) is None:
             raise DocumentNotFound
-        return await chunk_repository.list_chunks(tenant_id, document_id, limit, offset)
+        return await chunk_repository.list_chunks(tenant_id, document_id, limit, after)
 
     async def delete(self, *, tenant_id: UUID, document_id: UUID) -> None:
         # Vectors first: if Qdrant is unavailable the row survives and the delete can be retried.

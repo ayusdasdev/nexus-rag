@@ -76,19 +76,20 @@ async def fetch_neighbors(
 
 
 async def list_chunks(
-    tenant_id: UUID, document_id: UUID, limit: int, offset: int
+    tenant_id: UUID, document_id: UUID, limit: int, after: int | None = None
 ) -> tuple[list[ChunkRecord], int]:
+    """In chunk_index order; `after` is the last chunk_index of the previous page."""
     async with session_scope() as session:
         scope = (Chunk.tenant_id == tenant_id, Chunk.document_id == document_id)
         total = await session.scalar(
             select(func.count()).select_from(Chunk).where(*scope)
         )
+        keyset = () if after is None else (Chunk.chunk_index > after,)
         result = await session.execute(
             select(Chunk)
-            .where(*scope)
+            .where(*scope, *keyset)
             .order_by(Chunk.chunk_index)
             .limit(limit)
-            .offset(offset)
         )
         records = [_to_record(row) for row in result.scalars().all()]
         return records, int(total or 0)

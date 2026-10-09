@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
@@ -95,20 +95,28 @@ async def get_conversation(
 
 
 async def list_conversations(
-    tenant_id: UUID, user_id: UUID, limit: int, offset: int
+    tenant_id: UUID,
+    user_id: UUID,
+    limit: int,
+    after: tuple[datetime, UUID] | None = None,
 ) -> tuple[list[ConversationRecord], int]:
-    """The caller's own conversations, newest first, and how many there are in total."""
+    """The caller's own conversations, newest first by (created_at, id), and their total.
+    `after` is the last row of the previous page."""
     scope = (Conversation.tenant_id == tenant_id, Conversation.user_id == user_id)
+    keyset = (
+        ()
+        if after is None
+        else (tuple_(Conversation.created_at, Conversation.id) < after,)
+    )
     async with session_scope() as session:
         total = await session.scalar(
             select(func.count()).select_from(Conversation).where(*scope)
         )
         result = await session.execute(
             select(Conversation)
-            .where(*scope)
+            .where(*scope, *keyset)
             .order_by(Conversation.created_at.desc(), Conversation.id.desc())
             .limit(limit)
-            .offset(offset)
         )
         return [_conversation(row) for row in result.scalars().all()], int(total or 0)
 
@@ -133,10 +141,10 @@ async def list_messages(
     user_id: UUID,
     conversation_id: UUID,
     limit: int | None = None,
-    offset: int = 0,
+    after: tuple[datetime, UUID] | None = None,
 ) -> list[MessageRecord] | None:
-    """Messages of the caller's conversation, oldest first, optionally one page of them.
-    None if not theirs."""
+    """Messages of the caller's conversation, oldest first by (created_at, id), optionally
+    one page of them after `after`. None if not theirs."""
     async with session_scope() as session:
         owned = await session.scalar(
             select(Conversation.id).where(*_owned(tenant_id, user_id, conversation_id))
@@ -149,9 +157,15 @@ async def list_messages(
                 Message.conversation_id == conversation_id,
                 Message.tenant_id == tenant_id,
             )
+            .where(
+                *(
+                    ()
+                    if after is None
+                    else (tuple_(Message.created_at, Message.id) > after,)
+                )
+            )
             .order_by(Message.created_at, Message.id)
             .limit(limit)
-            .offset(offset)
         )
         return [_message(row) for row in result.scalars().all()]
 

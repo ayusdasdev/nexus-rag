@@ -37,7 +37,9 @@ class ConversationList(BaseModel):
     items: list[ConversationOut]
     total: int
     limit: int
-    offset: int
+    next_cursor: str | None = Field(
+        description="Pass as `after` for the next page; null on the last page."
+    )
 
 
 class MessageOut(BaseModel):
@@ -62,6 +64,9 @@ class ConversationDetail(ConversationOut):
         description="One page of messages, oldest first."
     )
     messages_total: int
+    next_cursor: str | None = Field(
+        description="Pass as `after` for the next page of messages; null on the last page."
+    )
 
 
 class ConversationMessageRequest(ChatRequest):

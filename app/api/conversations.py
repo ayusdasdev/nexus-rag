@@ -13,6 +13,7 @@ from app.api.chat import (
     sse_response,
 )
 from app.api.deps import CurrentUser, get_current_user, get_tenant_id
+from app.api.pagination import AFTER, page, time_cursor_key, time_key
 from app.core.config import Settings, get_settings
 from app.models.conversation import MessageRole
 from app.providers.llm import LLMProvider
@@ -100,16 +101,24 @@ async def create_conversation(
 @router.get("", response_model=ConversationList, summary="List my conversations")
 async def list_conversations(
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    after: str | None = AFTER,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
 ) -> ConversationList:
-    """The caller's own conversations, newest first. Other users' never appear."""
-    records, total = await conversation_repository.list_conversations(
-        tenant_id, user.id, limit=limit, offset=offset
+    """The caller's own conversations, newest first, one cursor page at a time. Other
+    users' never appear, and a cursor issued to someone else is rejected."""
+    scope = f"conversations:{tenant_id}:{user.id}"
+    rows, total = await conversation_repository.list_conversations(
+        tenant_id, user.id, limit=limit + 1, after=time_key(after, scope)
+    )
+    records, next_cursor = page(
+        rows, limit, scope, lambda r: time_cursor_key(r.created_at, r.id)
     )
     return ConversationList(
-        items=[_out(r) for r in records], total=total, limit=limit, offset=offset
+        items=[_out(r) for r in records],
+        total=total,
+        limit=limit,
+        next_cursor=next_cursor,
     )
 
 
@@ -122,26 +131,38 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: UUID,
     limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    after: str | None = AFTER,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
 ) -> ConversationDetail:
-    """The conversation and its messages, oldest first. 404 unless the caller owns it."""
+    """The conversation and one cursor page of its messages, oldest first. 404 unless the
+    caller owns it (checked before the cursor, so a non-owner always gets the 404)."""
     record = await conversation_repository.get_conversation(
         tenant_id, user.id, conversation_id
     )
-    messages = await conversation_repository.list_messages(
-        tenant_id, user.id, conversation_id, limit=limit, offset=offset
+    if record is None:
+        raise not_found()
+    scope = f"messages:{tenant_id}:{user.id}:{conversation_id}"
+    rows = await conversation_repository.list_messages(
+        tenant_id,
+        user.id,
+        conversation_id,
+        limit=limit + 1,
+        after=time_key(after, scope),
     )
     total = await conversation_repository.count_messages(
         tenant_id, user.id, conversation_id
     )
-    if record is None or messages is None or total is None:
+    if rows is None or total is None:
         raise not_found()
+    messages, next_cursor = page(
+        rows, limit, scope, lambda m: time_cursor_key(m.created_at, m.id)
+    )
     return ConversationDetail(
         **_out(record).model_dump(),
         messages=[_message_out(m) for m in messages],
         messages_total=total,
+        next_cursor=next_cursor,
     )
 
 

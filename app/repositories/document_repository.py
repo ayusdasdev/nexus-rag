@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
@@ -121,8 +121,12 @@ async def reset_failed_to_uploaded(document_id: UUID) -> bool:
 
 
 async def list_documents(
-    tenant_id: UUID, limit: int, offset: int
+    tenant_id: UUID, limit: int, after: tuple[datetime, UUID] | None = None
 ) -> tuple[list[DocumentRecord], int]:
+    """Newest first by (created_at, id); `after` is the last row of the previous page."""
+    keyset = (
+        () if after is None else (tuple_(Document.created_at, Document.id) < after,)
+    )
     async with session_scope() as session:
         total = await session.scalar(
             select(func.count())
@@ -131,10 +135,9 @@ async def list_documents(
         )
         result = await session.execute(
             select(Document)
-            .where(Document.tenant_id == tenant_id)
-            .order_by(Document.created_at.desc(), Document.id)
+            .where(Document.tenant_id == tenant_id, *keyset)
+            .order_by(Document.created_at.desc(), Document.id.desc())
             .limit(limit)
-            .offset(offset)
         )
         return [_to_record(row) for row in result.scalars().all()], int(total or 0)
 

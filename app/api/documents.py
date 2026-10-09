@@ -12,6 +12,7 @@ from fastapi import (
 )
 
 from app.api.deps import CurrentUser, get_current_user
+from app.api.pagination import AFTER, index_key, page, time_cursor_key, time_key
 from app.core.config import get_settings
 from app.core.errors import TransientError
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
@@ -140,25 +141,28 @@ async def get_document(
 
 
 _LIMIT = Query(default=20, ge=1, le=100)
-_OFFSET = Query(default=0, ge=0)
 
 
 @router.get("", response_model=DocumentPage, summary="List the tenant's documents")
 async def list_documents(
     limit: int = _LIMIT,
-    offset: int = _OFFSET,
+    after: str | None = AFTER,
     current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> DocumentPage:
-    """Newest first. Only documents in the caller's tenant."""
-    records, total = await service.list_documents(
-        tenant_id=current_user.tenant_id, limit=limit, offset=offset
+    """Newest first, one cursor page at a time. Only documents in the caller's tenant."""
+    scope = f"documents:{current_user.tenant_id}"
+    rows, total = await service.list_documents(
+        tenant_id=current_user.tenant_id, limit=limit + 1, after=time_key(after, scope)
+    )
+    records, next_cursor = page(
+        rows, limit, scope, lambda r: time_cursor_key(r.created_at, r.id)
     )
     return DocumentPage(
         items=[_to_response(record) for record in records],
         total=total,
         limit=limit,
-        offset=offset,
+        next_cursor=next_cursor,
     )
 
 
@@ -170,22 +174,25 @@ async def list_documents(
 async def list_chunks(
     document_id: UUID,
     limit: int = _LIMIT,
-    offset: int = _OFFSET,
+    after: str | None = AFTER,
     current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> ChunkPage:
-    """Chunks in chunk_index order. 404 if the document is not in the caller's tenant."""
+    """Chunks in chunk_index order, one cursor page at a time. 404 if the document is not
+    in the caller's tenant."""
+    scope = f"chunks:{current_user.tenant_id}:{document_id}"
     try:
-        records, total = await service.list_chunks(
+        rows, total = await service.list_chunks(
             tenant_id=current_user.tenant_id,
             document_id=document_id,
-            limit=limit,
-            offset=offset,
+            limit=limit + 1,
+            after=index_key(after, scope),
         )
     except DocumentNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         ) from exc
+    records, next_cursor = page(rows, limit, scope, lambda r: [r.chunk_index])
     return ChunkPage(
         items=[
             ChunkResponse(
@@ -200,7 +207,7 @@ async def list_chunks(
         ],
         total=total,
         limit=limit,
-        offset=offset,
+        next_cursor=next_cursor,
     )
 
 

@@ -94,10 +94,12 @@ async def test_list_is_paginated_newest_first(
     ids = [await _create(client, caller, f"c{n}") for n in range(3)]
 
     page = await client.get(
-        "/v1/conversations", headers=caller.headers, params={"limit": 2, "offset": 0}
+        "/v1/conversations", headers=caller.headers, params={"limit": 2}
     )
     rest = await client.get(
-        "/v1/conversations", headers=caller.headers, params={"limit": 2, "offset": 2}
+        "/v1/conversations",
+        headers=caller.headers,
+        params={"limit": 2, "after": page.json()["next_cursor"]},
     )
 
     assert page.status_code == 200
@@ -106,7 +108,9 @@ async def test_list_is_paginated_newest_first(
     assert [c["id"] for c in rest.json()["items"]] == [ids[0]]
 
 
-@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+@pytest.mark.parametrize(
+    "params", [{"limit": 0}, {"limit": 101}, {"after": "not-a-cursor"}]
+)
 async def test_list_with_bad_paging_is_422(
     client: AsyncClient, new_tenant: NewTenant, params: dict[str, int]
 ) -> None:
@@ -239,16 +243,23 @@ async def test_get_pages_messages_and_reports_their_total(
     url = f"/v1/conversations/{await _create(client, caller)}"
     await client.post(f"{url}/messages", headers=caller.headers, json={"question": Q1})
 
+    first = await client.get(url, headers=caller.headers, params={"limit": 1})
     page = await client.get(
-        url, headers=caller.headers, params={"limit": 1, "offset": 1}
+        url,
+        headers=caller.headers,
+        params={"limit": 1, "after": first.json()["next_cursor"]},
     )
 
     assert page.status_code == 200
+    assert [m["role"] for m in first.json()["messages"]] == ["user"]
     assert [m["role"] for m in page.json()["messages"]] == ["assistant"]
     assert page.json()["messages_total"] == 2
+    assert page.json()["next_cursor"] is None
 
 
-@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 501}, {"offset": -1}])
+@pytest.mark.parametrize(
+    "params", [{"limit": 0}, {"limit": 501}, {"after": "not-a-cursor"}]
+)
 async def test_get_with_bad_message_paging_is_422(
     client: AsyncClient, new_tenant: NewTenant, params: dict[str, int]
 ) -> None:

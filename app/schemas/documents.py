@@ -42,7 +42,9 @@ class DocumentPage(BaseModel):
     items: list[DocumentResponse]
     total: int = Field(description="Total documents in the tenant.")
     limit: int
-    offset: int
+    next_cursor: str | None = Field(
+        description="Pass as `after` for the next page; null on the last page."
+    )
 
 
 class ChunkResponse(BaseModel):
@@ -77,4 +79,6 @@ class ChunkPage(BaseModel):
     items: list[ChunkResponse]
     total: int
     limit: int
-    offset: int
+    next_cursor: str | None = Field(
+        description="Pass as `after` for the next page; null on the last page."
+    )
