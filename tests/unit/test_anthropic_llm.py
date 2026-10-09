@@ -1,10 +1,13 @@
 import json
+import math
 from collections.abc import Callable
 from typing import Any
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
+from app.core.config import Settings
 from app.providers.anthropic_llm import AnthropicProvider
 from app.providers.llm import (
     ChatMessage,
@@ -258,3 +261,31 @@ async def test_a_connection_failure_is_unavailable() -> None:
 
     with pytest.raises(LLMUnavailable, match="Anthropic"):
         await _collect(_provider(_Recorder([refuse]), []))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["nan", "inf", "-5"])
+async def test_a_non_finite_or_negative_retry_after_falls_back_to_a_bounded_delay(
+    value: str,
+) -> None:
+    recorder = _Recorder(
+        [_error(429, "rate_limit_error", {"retry-after": value}), _ok(STOP)]
+    )
+    sleeps: list[float] = []
+
+    await _collect(_provider(recorder, sleeps))
+
+    assert len(sleeps) == 1
+    assert math.isfinite(sleeps[0])
+    assert 0.0 <= sleeps[0] <= 10.0
+
+
+def test_the_api_key_never_appears_in_repr_or_settings_dumps() -> None:
+    provider = _provider(_Recorder([]), [])
+    settings = Settings(
+        _env_file=None, llm_provider="anthropic", anthropic_api_key=SecretStr(KEY)
+    )
+
+    for text in (repr(provider), str(provider), repr(settings), str(settings)):
+        assert KEY not in text
+    assert KEY not in json.dumps(settings.model_dump(mode="json"))

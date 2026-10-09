@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     # Budget for retrieved text in the prompt, and for the answer itself.
     max_context_tokens: int = Field(default=2500, ge=100)
     answer_max_tokens: int = Field(default=512, ge=16)
+    # Per-process cap on LLM answers in flight, and a deadline for a whole answer. A
+    # per-tenant quota comes with the M7 rate limiter.
+    chat_max_concurrent_answers: int = Field(default=4, ge=1, le=64)
+    llm_answer_deadline_seconds: float = Field(default=180.0, gt=0)
 
     @model_validator(mode="after")
     def _anthropic_needs_a_key(self) -> "Settings":
@@ -94,6 +98,9 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "jwt_secret must be at least 32 characters in production"
                 )
+            if not self.anthropic_base_url.startswith("https://"):
+                # The API key travels in a header; never send it in cleartext.
+                raise ValueError("anthropic_base_url must be https in production")
         return self
 
 

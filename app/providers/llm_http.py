@@ -1,6 +1,7 @@
 """HTTP plumbing shared by the Ollama and Anthropic providers: one retry, typed errors."""
 
 import json
+import math
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 import httpx
@@ -18,10 +19,12 @@ MAX_RETRY_DELAY = 10.0
 
 
 def _retry_after(response: httpx.Response) -> float | None:
+    """Seconds the server asked us to wait; None unless finite and non-negative."""
     try:
-        return float(response.headers["retry-after"])
+        value = float(response.headers["retry-after"])
     except (KeyError, ValueError):
         return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _detail(body: bytes) -> str:

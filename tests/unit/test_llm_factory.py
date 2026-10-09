@@ -64,3 +64,21 @@ def test_generation_defaults() -> None:
     assert settings.answer_max_tokens == 512
     assert settings.anthropic_max_tokens == 16000
     assert settings.anthropic_effort == "medium"
+
+
+def test_production_requires_an_https_anthropic_base_url() -> None:
+    with pytest.raises(ValidationError, match="https"):
+        _settings(
+            app_env="production",
+            jwt_secret="x" * 40,
+            anthropic_base_url="http://api.anthropic.example",
+        )
+
+
+def test_answer_limits_default_and_are_bounded() -> None:
+    settings = _settings()
+
+    assert settings.chat_max_concurrent_answers == 4
+    assert settings.llm_answer_deadline_seconds == 180.0
+    with pytest.raises(ValidationError):
+        _settings(chat_max_concurrent_answers=0)
