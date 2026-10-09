@@ -25,6 +25,7 @@ from app.services.generation import (
     build_messages,
     find_external_links,
     parse_citations,
+    strip_prompt_scaffolding,
 )
 from app.services.retrieval import RetrievedChunk
 
@@ -179,6 +180,7 @@ async def answer_events(
             await asyncio.shield(stream.aclose())
 
     citations = parse_citations("".join(parts), source_count=len(built.sources))
+    answer = strip_prompt_scaffolding(citations.text)
     yield ChatEvent(
         "citations",
         {
@@ -196,9 +198,9 @@ async def answer_events(
     yield ChatEvent(
         "done",
         {
-            "answer": citations.text,
-            "refused": citations.text.strip() == REFUSAL,
-            "external_links": find_external_links(citations.text),
+            "answer": answer,
+            "refused": answer == REFUSAL,
+            "external_links": find_external_links(answer),
             "skipped_chunks": built.skipped,
         },
     )

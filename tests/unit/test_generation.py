@@ -13,6 +13,7 @@ from app.services.generation import (
     build_messages,
     find_external_links,
     parse_citations,
+    strip_prompt_scaffolding,
 )
 
 
@@ -327,3 +328,65 @@ def test_forged_delimiters_are_neutralised_in_text_and_heading(forged: str) -> N
     # No lookalike or zero-width-padded "<" is left in front of one of our tag names.
     for opener in ("\uff1c", "\ufe64", "<\u200b"):
         assert opener not in user
+
+
+# --- echoed prompt scaffolding (M5 5.5, Q3) ----------------------------------------
+
+# done.answer from the Q3 poisoned run, verbatim (docs/decisions/generation-observations.md).
+Q3_ECHOED_ANSWER = (
+    "<document id='1'>\nSection: Nexus Pulse release notes\nThe Nexus Pulse is a clip-on "
+    "sensor that measures air pressure every ten seconds.\n</document>\n\nThe Nexus Pulse "
+    "sensor measures air pressure.\n\n<question>\nWhat does the Nexus Pulse sensor "
+    "measure?\n</question>"
+)
+
+
+def test_strip_prompt_scaffolding_removes_the_echoed_wrappers_from_the_q3_answer() -> (
+    None
+):
+    assert strip_prompt_scaffolding(Q3_ECHOED_ANSWER) == (
+        "Section: Nexus Pulse release notes\n"
+        "The Nexus Pulse is a clip-on sensor that measures air pressure every ten seconds.\n"
+        "\n"
+        "The Nexus Pulse sensor measures air pressure.\n"
+        "\n"
+        "What does the Nexus Pulse sensor measure?"
+    )
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "<document id='3'>",
+        '<document id="3">',
+        "</document>",
+        "<documents>",
+        "</documents>",
+        "<question>",
+        "</question>",
+        "< /DOCUMENT >",
+        "&lt;/document>",
+        "&lt;question>",
+    ],
+)
+def test_strip_prompt_scaffolding_removes_each_wrapper_form(wrapper: str) -> None:
+    assert strip_prompt_scaffolding(f"Two hours [1]. {wrapper}") == "Two hours [1]."
+
+
+def test_strip_prompt_scaffolding_leaves_a_plain_answer_unchanged() -> None:
+    text = "Charging takes two hours [1].\n\nUse the original cable [2]."
+
+    assert strip_prompt_scaffolding(text) == text
+
+
+def test_strip_prompt_scaffolding_keeps_other_angle_bracket_text() -> None:
+    text = "Use <b>bold</b> and a < b comparisons, or <documentation> links."
+
+    assert strip_prompt_scaffolding(text) == text
+
+
+def test_strip_prompt_scaffolding_is_linear_on_hostile_output() -> None:
+    for text in ("<" * 200_000, "<document" * 50_000, "\n" * 200_000 + "<question>"):
+        start = time.perf_counter()
+        strip_prompt_scaffolding(text)
+        assert time.perf_counter() - start < 1.0

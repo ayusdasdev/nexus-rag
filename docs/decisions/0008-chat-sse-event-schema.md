@@ -21,7 +21,8 @@ answer are never fetched.
   - `citations`: `{citations: [{number, chunk_id, document_id}], dropped: [n...]}`. The ids
     are resolved on the server from `number`, never taken from model text.
   - `done`: `{answer, refused, external_links, skipped_chunks}`. `answer` is the
-    authoritative text, with invalid citations removed. A client should replace the streamed
+    authoritative text, with invalid citations removed and any echoed prompt wrappers
+    (`<document ...>`, `</document>`, `<question>`, ...) stripped (seen in M5 5.5). A client should replace the streamed
     text with it.
   - `error`: `{code, message}` with a fixed message per error class (`llm_unavailable`,
     `llm_rate_limited`, `llm_refused`, `llm_rejected`, `llm_not_configured`). Provider details

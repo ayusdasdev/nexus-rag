@@ -383,3 +383,18 @@ async def _consume_with_slots(slots: asyncio.Semaphore) -> None:
         slots=slots,
     ):
         pass
+
+
+@pytest.mark.asyncio
+async def test_done_answer_has_echoed_prompt_wrappers_stripped() -> None:
+    echoed = (
+        "<document id='1'>\nCharging takes two hours.\n</document>\n\nTwo hours [1]."
+    )
+    llm = FakeLLM([echoed])
+
+    events = await _events([_hit("Charging takes two hours.")], llm)
+
+    # Raw tokens stay as streamed; done.answer is the cleaned, authoritative text.
+    assert events[1].data == {"text": echoed}
+    assert events[-1].data["answer"] == "Charging takes two hours.\n\nTwo hours [1]."
+    assert [c["number"] for c in events[-2].data["citations"]] == [1]

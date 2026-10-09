@@ -145,6 +145,22 @@ def parse_citations(text: str, source_count: int) -> Citations:
     return Citations(text="".join(out), numbers=numbers, dropped=dropped)
 
 
+# Our own section tags echoed back by the model (seen with llama3.2:3b, M5 5.5 Q3), raw or
+# in the &lt; form _neutralise produces. Bounded, so it stays linear on any output.
+_SCAFFOLD_TAG = re.compile(
+    r"(?:<|&lt;)[ \t]{0,4}/?[ \t]{0,4}(?:documents?|question)\b[^<>\n]{0,200}>[ \t]*\n?",
+    re.IGNORECASE,
+)
+_EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
+
+
+def strip_prompt_scaffolding(text: str) -> str:
+    """Remove echoed <document ...>, </document>, <documents>, <question> wrappers (and their
+    closing tags) from an answer. The text between them is kept."""
+    without_tags = _SCAFFOLD_TAG.sub("", text)
+    return _EXTRA_BLANK_LINES.sub("\n\n", without_tags).strip()
+
+
 _URL = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 
 
