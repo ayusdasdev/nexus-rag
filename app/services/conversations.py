@@ -3,11 +3,16 @@
 import asyncio
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from itertools import pairwise
 from typing import Any
 
 from app.repositories.conversation_repository import MessageRecord
 from app.services.chat import ChatEvent
-from app.services.generation import HistoryTurn
+from app.services.generation import (
+    HistoryTurn,
+    parse_citations,
+    strip_prompt_scaffolding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +34,23 @@ def stored_sources(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def history_turns(messages: Sequence[MessageRecord]) -> list[HistoryTurn]:
-    """Earlier turns, oldest first. A truncated (unfinished) answer is not resent."""
-    return [
-        HistoryTurn(role="user" if m.role == "user" else "assistant", content=m.content)
-        for m in messages
-        if not (m.role == "assistant" and m.truncated)
-    ]
+    """Earlier answered turns, oldest first, as user/assistant pairs.
+
+    A question without a complete answer (failed, truncated) is left out with its answer,
+    so roles always alternate. Old [N] citation numbers are stripped from answers: they
+    referred to that turn's sources, not the current ones.
+    """
+    turns: list[HistoryTurn] = []
+    for question, answer in pairwise(messages):
+        if (
+            question.role == "user"
+            and answer.role == "assistant"
+            and not answer.truncated
+        ):
+            turns.append(HistoryTurn(role="user", content=question.content))
+            cleaned = parse_citations(answer.content, source_count=0).text
+            turns.append(HistoryTurn(role="assistant", content=cleaned))
+    return turns
 
 
 async def persisted_events(
@@ -63,11 +79,20 @@ async def persisted_events(
                 answer = event.data["answer"]
             yield event
     finally:
-        await asyncio.shield(events.aclose())
+        try:
+            await asyncio.shield(events.aclose())
+        except Exception as exc:  # noqa: BLE001 - the save below must still happen
+            logger.error("closing the answer stream failed: %s", type(exc).__name__)
+        if answer is None:
+            # A partial answer gets the same cleaning as a finished one before it's kept.
+            partial = parse_citations("".join(parts), source_count=len(sources)).text
+            answer_text = strip_prompt_scaffolding(partial)
+        else:
+            answer_text = answer
         try:
             await asyncio.shield(
                 save(
-                    content=answer if answer is not None else "".join(parts),
+                    content=answer_text,
                     sources=sources,
                     rewritten_query=rewritten_query,
                     model=model,

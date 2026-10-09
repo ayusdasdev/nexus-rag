@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from app.repositories.conversation_repository import MessageRecord
 from app.services.chat import ChatEvent
 from app.services.conversations import history_turns, persisted_events, stored_sources
 
@@ -90,7 +91,7 @@ async def test_an_error_mid_answer_saves_the_partial_text_as_truncated() -> None
         )
     ]
 
-    assert save.calls[0]["content"] == "Two "
+    assert save.calls[0]["content"] == "Two"
     assert save.calls[0]["truncated"] is True
 
 
@@ -120,7 +121,7 @@ async def test_a_client_disconnect_saves_the_partial_text_as_truncated() -> None
 
     assert save.calls == [
         {
-            "content": "Two ",
+            "content": "Two",
             "sources": stored_sources(SOURCES),
             "rewritten_query": "q",
             "model": "m",
@@ -155,8 +156,112 @@ def test_history_turns_skip_truncated_answers_and_keep_order() -> None:
         message("assistant", "half an ans", truncated=True),
     ]
 
+    # q2's answer is truncated, so q2 goes too: roles must alternate (M6 review, LOW-2).
     assert [(t.role, t.content) for t in history_turns(records)] == [
         ("user", "q1"),
         ("assistant", "a1"),
-        ("user", "q2"),
     ]
+
+
+# --- M6 review, LOW-2 / INFO-1 ------------------------------------------------------
+
+
+def _record(role: str, content: str, truncated: bool = False) -> MessageRecord:
+    from datetime import UTC, datetime
+
+    from app.repositories.conversation_repository import MessageRecord
+
+    return MessageRecord(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        role,
+        content,
+        None,
+        None,
+        None,
+        None,
+        truncated,
+        datetime.now(UTC),
+    )
+
+
+def test_history_resends_only_answered_turns_so_roles_alternate() -> None:
+    records = [
+        _record("user", "q1"),
+        _record("assistant", "a1"),
+        _record("user", "q2 never answered (retrieval failed)"),
+        _record("user", "q3"),
+        _record("assistant", "half", truncated=True),
+        _record("user", "q4"),
+        _record("assistant", "a4"),
+    ]
+
+    turns = history_turns(records)
+
+    assert [(t.role, t.content) for t in turns] == [
+        ("user", "q1"),
+        ("assistant", "a1"),
+        ("user", "q4"),
+        ("assistant", "a4"),
+    ]
+
+
+def test_history_strips_old_citation_numbers_from_earlier_answers() -> None:
+    turns = history_turns(
+        [_record("user", "q"), _record("assistant", "Two hours [1][2].")]
+    )
+
+    assert turns[1].content == "Two hours."
+
+
+@pytest.mark.asyncio
+async def test_a_partial_answer_is_cleaned_before_it_is_saved() -> None:
+    save = _Saved()
+    stream = _stream(
+        ChatEvent("sources", {"sources": SOURCES}),
+        ChatEvent("token", {"text": "<document id='1'>\nTwo hours [1][9]"}),
+        ChatEvent("error", {"code": "llm_timeout", "message": "x"}),
+    )
+
+    _ = [
+        e
+        async for e in persisted_events(
+            stream, save=save, model="m", rewritten_query="q"
+        )
+    ]
+
+    assert save.calls[0]["content"] == "Two hours [1]"
+    assert save.calls[0]["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_the_answer_is_saved_even_if_closing_the_stream_fails() -> None:
+    save = _Saved()
+
+    class Exploding:
+        def __init__(self) -> None:
+            self._events = iter([ChatEvent("sources", {"sources": SOURCES})])
+
+        def __aiter__(self) -> "Exploding":
+            return self
+
+        async def __anext__(self) -> ChatEvent:
+            try:
+                return next(self._events)
+            except StopIteration:
+                raise StopAsyncIteration from None
+
+        async def aclose(self) -> None:
+            raise RuntimeError("close failed")
+
+    _ = [
+        e
+        async for e in persisted_events(
+            Exploding(),  # type: ignore[arg-type]
+            save=save,
+            model="m",
+            rewritten_query="q",
+        )
+    ]
+
+    assert len(save.calls) == 1

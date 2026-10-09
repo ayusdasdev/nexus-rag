@@ -84,7 +84,10 @@ def _clean(output: str) -> str:
 
 
 def _render(history: Sequence[HistoryTurn], question: str) -> list[ChatMessage]:
-    lines = "\n".join(f"{t.role}: {neutralise(t.content, _TAGS)}" for t in history)
+    # One line per turn: a newline inside content can't start a forged "user:" line.
+    lines = "\n".join(
+        f"{t.role}: {' '.join(neutralise(t.content, _TAGS).split())}" for t in history
+    )
     values = {"history": lines, "question": neutralise(question, _TAGS)}
     user = re.sub(
         r"\{\{(history|question)\}\}",

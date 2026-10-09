@@ -169,7 +169,8 @@ async def test_the_second_turn_is_rewritten_by_rule_and_sees_the_history(
     prompt = fake_llm.calls[-1]
     assert [m.role for m in prompt] == ["system", "user", "assistant", "user"]
     assert prompt[1].content == Q1
-    assert prompt[2].content == "Two hours [1]."
+    # Old [N] numbers are stripped from resent answers (M6 review, LOW-2).
+    assert prompt[2].content == "Two hours."
     assert f"<question>\n{Q2}\n</question>" in prompt[3].content
 
 
