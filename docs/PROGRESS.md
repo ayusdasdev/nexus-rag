@@ -167,12 +167,20 @@ first; conversations are owner-only (admins get 404 too).
 - [x] 6.2 `rewriting.py`: `trim_history` and `rewrite_query` with `REWRITE_MODE=rule|llm|off`,
   prompt in `app/prompts/rewrite.md`, FakeLLM tests (`c2561da`, `be8d156`, ADR-0009). Deviation
   from the guide: the overlong limit is 3x (previous + current question), not 3x the question.
-- [ ] 6.3 Five conversation endpoints. The messages endpoint reuses the M5 chat pipeline
-  (shared service), persists the user message first and the assistant message on completion
-  (`truncated=true` on disconnect), and puts `rewritten_query` in the `sources` event.
-- [ ] 6.4 IDOR suite: other user in the same tenant gets 404, other tenant gets 404, list shows
-  only own, rewrite never crosses tenants, delete cascades messages.
-- [ ] 6.5 `.claude/commands/pr.md` (prints PR text only, never pushes).
+- [x] 6.3 Five conversation endpoints reusing the M5 pipeline (`098efd3`, `335344b`,
+  `f2e0a2a`, `6ebae2d`): user message saved first, assistant saved however the stream ends
+  (`truncated=true` on error or disconnect), `rewritten_query` in `sources`. Stored sources
+  keep ids/headings, never chunk text. Fix found in the 6.5 run: SQL NULL for missing
+  sources/usage (`c87228b`).
+- [x] 6.4 IDOR suite (`53b7316`), written before the endpoints, owner-200 precondition in
+  each test: other user, tenant admin and other tenant get the same 404 as a missing id for
+  get/post/delete, nothing written; list own only; cascade; rewrite never crosses tenants;
+  401 everywhere. Mutations caught: no user_id in ownership (6 fail), in list (2), route's
+  404 skipped (3).
+- [x] 6.5 `.claude/commands/pr.md` (`202b9b6`), base `master`; not run end to end (slash
+  commands can't be invoked from here). Two real turns against Ollama recorded in
+  `generation-observations.md` (`055e53e`): the rule rewrite resolved "them", cold turn 1
+  finished at 224.93 s under the new 300 s timeout.
 - [ ] security-reviewer subagent on the M6 diff.
 
 ## M7: API polish and CLI
