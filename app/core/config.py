@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     # Bounds on stored conversation data (M6 review, MEDIUM-3); past them, 409.
     conversation_max_messages: int = Field(default=1000, ge=2)
     max_conversations_per_user: int = Field(default=1000, ge=1)
+    # Per-tenant token buckets (M7); each user gets half. Chat covers /v1/chat and
+    # conversation messages, search covers /v1/search, default every other authed route.
+    rate_limit_enabled: bool = True
+    rate_limit_chat_capacity: float = Field(default=5, gt=0)
+    rate_limit_chat_refill_per_second: float = Field(default=1 / 60, ge=0)
+    rate_limit_search_capacity: float = Field(default=20, gt=0)
+    rate_limit_search_refill_per_second: float = Field(default=0.2, ge=0)
+    rate_limit_default_capacity: float = Field(default=120, gt=0)
+    rate_limit_default_refill_per_second: float = Field(default=2.0, ge=0)
     llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
 
     @model_validator(mode="after")
