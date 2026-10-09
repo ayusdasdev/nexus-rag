@@ -220,8 +220,9 @@ dependency).
   recreated the `conversations`/`messages` tables in the local dev DB. Lost: test leftovers
   and the M6 6.5 demo conversation (its output is in `generation-observations.md`).
   Documents, chunks, users and Qdrant were untouched.
-- [ ] 7.2 Cursor pagination (opaque, tenant-scoped, invalid cursor gives 422, capped limit) on
-  documents, chunks and conversations.
+- [x] 7.2 Cursor pagination (`c8c7ca4`, `88b6fed`): opaque, HMAC-signed, scope-bound cursors on
+  documents, chunks, conversations and conversation messages; forged or cross-scope -> 422;
+  limits capped; offset removed (4 existing tests moved to cursors).
 - [ ] 7.2 Per-tenant Redis token-bucket rate limiter (reads vs `/chat`), 429 + `Retry-After` +
   `X-RateLimit-*`. Fake-clock unit tests and a real-Redis integration test (no fakeredis dep).
 - [ ] 7.2 Optional `Idempotency-Key` on `POST /v1/documents`.
