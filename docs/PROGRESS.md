@@ -223,9 +223,13 @@ dependency).
 - [x] 7.2 Cursor pagination (`c8c7ca4`, `88b6fed`): opaque, HMAC-signed, scope-bound cursors on
   documents, chunks, conversations and conversation messages; forged or cross-scope -> 422;
   limits capped; offset removed (4 existing tests moved to cursors).
-- [ ] 7.2 Per-tenant Redis token-bucket rate limiter (reads vs `/chat`), 429 + `Retry-After` +
-  `X-RateLimit-*`. Fake-clock unit tests and a real-Redis integration test (no fakeredis dep).
-- [ ] 7.2 Optional `Idempotency-Key` on `POST /v1/documents`.
+- [x] 7.2 Rate limiter (`bb11076`, `ec7fb1e`, `3bbb536`): Redis token buckets per tenant AND per
+  user, atomic Lua; chat / search / default classes; 429 problem + `Retry-After` +
+  `X-RateLimit-*`; token-only keys (spoofed forwarding headers tested); chat fails closed,
+  others open. Fake-clock unit tests, real-Redis tests; removing the user bucket fails 8.
+  `make test-int` after wiring: 258 passed.
+- [ ] 7.2 Optional `Idempotency-Key` on `POST /v1/documents`: deferred (upload already dedups by
+  content hash; low value, see `docs/api-audit.md` item 8).
 - [ ] 7.3 OpenAPI pass: tags, summaries, examples, error responses, unique operation_ids. Export
   `openapi.json`.
 - [ ] 7.4 `cli/nexus_cli.py` (typer + httpx): login, upload --wait, docs, search, ask
