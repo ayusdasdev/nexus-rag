@@ -153,7 +153,7 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
 - [x] `OLLAMA_TIMEOUT_SECONDS=300` (Ollama only), `LLM_ANSWER_DEADLINE_SECONDS` 180 -> 420
   (`c2f9e9d`). A cold start under the new limits isn't re-measured yet.
 
-## M6: Conversations, memory, query rewriting
+## M6: Conversations, memory, query rewriting (closed 2026-10-09)
 
 Your decisions (2026-10-09): rewriting `REWRITE_MODE=rule|llm|off`, default `rule`, both built;
 history shares `MAX_CONTEXT_TOKENS` (2500), capped at `HISTORY_MAX_TOKENS=500`, most recent
@@ -181,7 +181,22 @@ first; conversations are owner-only (admins get 404 too).
   commands can't be invoked from here). Two real turns against Ollama recorded in
   `generation-observations.md` (`055e53e`): the rule rewrite resolved "them", cold turn 1
   finished at 224.93 s under the new 300 s timeout.
-- [ ] security-reviewer subagent on the M6 diff.
+- [x] security-reviewer subagent on `88b4b21..1668dbd`: no critical/high, 3 medium, all fixed
+  with tests first:
+  - MEDIUM-1: shared 404/401 exception grew its traceback per raise (reproduced, depth
+    2 -> 10) -> fresh exception per raise, incl. the pre-existing auth 401 (`6acb207`).
+  - MEDIUM-2: LLM rewrite ran outside answer slots and deadline -> now inside (`d96450c`).
+  - MEDIUM-3: unbounded loads/growth -> newest-50 history load, paged messages, 409 caps
+    (`223c9d9`).
+  - Lows/infos fixed: vanished conversation -> 404 (`78cab77`); answered pairs only, stale
+    `[N]` stripped, "earlier turns are context" rule, one-line rewrite history, cleaned
+    partial saves (`da19edc`); provider errors logged by type (`a801afa`); `/pr` exact
+    tools (`bcafe01`).
+  - Accepted, in ADR-0009 (`d28d0b8`): document text can survive in old answers after the
+    document is deleted; no composite FK `conversations(user_id, tenant_id)` yet (needs a new
+    migration).
+- [x] M6 close checks (run one at a time, Ollama stopped): `make lint` pass, `make test`
+  **365 passed**, `make test-int` **218 passed**, no 401, nothing flaky.
 
 ## M7: API polish and CLI
 
