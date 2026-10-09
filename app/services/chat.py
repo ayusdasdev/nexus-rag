@@ -172,7 +172,8 @@ async def answer_events(
             yield _TIMEOUT_ERROR
             return
         except LLMError as exc:
-            logger.warning("LLM %s failed: %s", llm.name, exc)
+            # By type only: provider error text can echo prompt or document fragments.
+            logger.warning("LLM %s failed: %s", llm.name, type(exc).__name__)
             yield _error_event(exc)
             return
         except Exception as exc:  # noqa: BLE001 - last resort, see comment below

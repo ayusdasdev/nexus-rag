@@ -433,3 +433,24 @@ async def test_the_stateless_chat_sources_event_has_no_rewritten_query() -> None
     events = await _events([_hit("Charging takes two hours.")], FakeLLM(["ok [1]."]))
 
     assert "rewritten_query" not in events[0].data
+
+
+@pytest.mark.asyncio
+async def test_a_provider_failure_is_logged_by_type_without_its_text(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # M6 review, INFO-2: provider error text can echo prompt or document fragments.
+    class Leaky:
+        name = "leaky"
+
+        async def stream(self, messages, max_tokens=512, temperature=0.0):  # type: ignore[no-untyped-def]
+            yield "Two "
+            raise LLMUnavailable(
+                "prompt too long: Charging takes two hours SECRET-DOC-TEXT"
+            )
+
+    with caplog.at_level("WARNING"):
+        await _events([_hit("Charging takes two hours.")], Leaky())
+
+    assert "LLMUnavailable" in caplog.text
+    assert "SECRET-DOC-TEXT" not in caplog.text
