@@ -7,6 +7,7 @@ import math
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from uuid import UUID
 
 from app.providers.llm import ChatMessage
@@ -47,17 +48,28 @@ def approx_tokens(text: str) -> int:
 # A "<" (or a fullwidth/small lookalike, optionally padded with zero-width characters)
 # that would open or close one of our own sections, inside untrusted text.
 _ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
-_DELIMITER = re.compile(
-    rf"[<\uff1c\ufe64][{_ZERO_WIDTH}]{{0,8}}"
-    rf"(?=[\s{_ZERO_WIDTH}]{{0,8}}/?[\s{_ZERO_WIDTH}]{{0,8}}(?:documents?|question)\b)",
-    re.IGNORECASE,
-)
-_SLOT = re.compile(r"\{\{(documents|question)\}\}")
+
+
+@lru_cache
+def _delimiter(names: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"[<\uff1c\ufe64][{_ZERO_WIDTH}]{{0,8}}"
+        rf"(?=[\s{_ZERO_WIDTH}]{{0,8}}/?[\s{_ZERO_WIDTH}]{{0,8}}(?:{names})\b)",
+        re.IGNORECASE,
+    )
+
+
+def neutralise(text: str, names: str = "documents?|question") -> str:
+    """Untrusted text can't open or close our tags (names: a regex alternation of tag
+    names); everything else stays verbatim."""
+    return _delimiter(names).sub("&lt;", text)
 
 
 def _neutralise(text: str) -> str:
-    """Untrusted text can't open or close our tags; everything else stays verbatim."""
-    return _DELIMITER.sub("&lt;", text)
+    return neutralise(text)
+
+
+_SLOT = re.compile(r"\{\{(documents|question)\}\}")
 
 
 def _document_block(number: int, chunk: ContextChunk) -> str:
