@@ -35,10 +35,13 @@ from app.services.rewriting import rewrite_query, trim_history
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
-# One response for "not yours" and "doesn't exist", so existence never leaks (ADR-0009).
-_NOT_FOUND = HTTPException(
-    status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
-)
+
+def not_found() -> HTTPException:
+    """One response for "not yours" and "doesn't exist", so existence never leaks
+    (ADR-0009). A fresh instance per raise: a shared one grows its traceback forever."""
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
+    )
 
 
 def _out(record: ConversationRecord) -> ConversationOut:
@@ -113,7 +116,7 @@ async def get_conversation(
         tenant_id, user.id, conversation_id
     )
     if record is None or messages is None:
-        raise _NOT_FOUND
+        raise not_found()
     return ConversationDetail(
         **_out(record).model_dump(), messages=[_message_out(m) for m in messages]
     )
@@ -155,7 +158,7 @@ async def post_message(
         tenant_id, user.id, conversation_id
     )
     if earlier is None:
-        raise _NOT_FOUND
+        raise not_found()
     history = trim_history(history_turns(earlier), settings.history_max_tokens)
     await conversation_repository.add_message(
         tenant_id,
@@ -217,5 +220,5 @@ async def delete_conversation(
         tenant_id, user.id, conversation_id
     )
     if not deleted:
-        raise _NOT_FOUND
+        raise not_found()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

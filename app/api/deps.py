@@ -10,11 +10,14 @@ from app.repositories.auth_repository import get_user_by_id
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
-_CREDENTIALS_ERROR = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+
+def _credentials_error() -> HTTPException:
+    # A fresh instance per raise: a shared one grows its traceback on every bad token.
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @dataclass(frozen=True)
@@ -41,11 +44,11 @@ async def get_current_user(
     try:
         token_payload = decode_access_token(credentials.credentials)
     except InvalidToken:
-        raise _CREDENTIALS_ERROR from None
+        raise _credentials_error() from None
 
     user = await get_user_by_id(token_payload.tenant_id, token_payload.user_id)
     if user is None:
-        raise _CREDENTIALS_ERROR
+        raise _credentials_error()
 
     return CurrentUser(
         id=user.id,
