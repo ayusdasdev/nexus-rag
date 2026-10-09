@@ -22,7 +22,7 @@ def build_llm(settings: Settings) -> LLMProvider:
         base_url=settings.ollama_url,
         model=settings.ollama_model,
         num_ctx=settings.ollama_num_ctx,
-        timeout=settings.llm_timeout_seconds,
+        timeout=settings.ollama_timeout_seconds,
     )
 
 

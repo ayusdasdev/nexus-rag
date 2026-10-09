@@ -79,6 +79,27 @@ def test_answer_limits_default_and_are_bounded() -> None:
     settings = _settings()
 
     assert settings.chat_max_concurrent_answers == 4
-    assert settings.llm_answer_deadline_seconds == 180.0
+    assert settings.llm_answer_deadline_seconds == 420.0
     with pytest.raises(ValidationError):
         _settings(chat_max_concurrent_answers=0)
+
+
+def test_ollama_gets_its_own_300s_timeout_and_anthropic_keeps_120s() -> None:
+    # 5.5: a cold CPU start (model load + ~90 s of prompt processing) outlasted 120 s.
+    settings = _settings()
+    assert settings.ollama_timeout_seconds == 300.0
+    assert settings.llm_timeout_seconds == 120.0
+
+    ollama = build_llm(settings)
+    anthropic = build_llm(
+        _settings(llm_provider="anthropic", anthropic_api_key=SecretStr("sk-ant-x"))
+    )
+
+    assert isinstance(ollama, OllamaProvider) and ollama.timeout == 300.0
+    assert isinstance(anthropic, AnthropicProvider) and anthropic.timeout == 120.0
+
+
+def test_the_answer_deadline_outlasts_the_ollama_timeout() -> None:
+    settings = _settings()
+
+    assert settings.llm_answer_deadline_seconds > settings.ollama_timeout_seconds

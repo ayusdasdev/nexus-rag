@@ -37,7 +37,7 @@ answer are never fetched.
 - At most `CHAT_MAX_CONCURRENT_ANSWERS` (default 4) LLM answers run at once per process. When
   all are taken, the stream is a single `error` event `llm_busy` and no LLM call is made. A
   refusal needs no slot.
-- `LLM_ANSWER_DEADLINE_SECONDS` (default 180) bounds a whole answer, not each read. Past it,
+- `LLM_ANSWER_DEADLINE_SECONDS` (default 420, raised from 180 after M5 5.5) bounds a whole answer, not each read. Past it,
   the stream ends with `llm_timeout` and the provider stream is closed.
 - Any unexpected exception during generation ends with a generic `llm_error` event, never a
   truncated stream.

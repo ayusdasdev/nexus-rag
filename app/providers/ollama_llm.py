@@ -29,7 +29,7 @@ class OllamaProvider:
         self.model = model
         self._base_url = base_url
         self._num_ctx = num_ctx
-        self._timeout = timeout
+        self.timeout = timeout
         self._transport = transport
         self._sleep = sleep
         self._retry_delay = retry_delay
@@ -51,7 +51,7 @@ class OllamaProvider:
             },
         }
         async with httpx.AsyncClient(
-            base_url=self._base_url, timeout=self._timeout, transport=self._transport
+            base_url=self._base_url, timeout=self.timeout, transport=self._transport
         ) as client:
             request = client.build_request("POST", "/api/chat", json=body)
             try:

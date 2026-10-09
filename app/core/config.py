@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:3b"
     ollama_num_ctx: int = Field(default=4096, ge=512)
+    # A cold CPU start (model load + ~90 s of prompt processing at ~15 tokens/s) outlasted
+    # 120 s in M5 5.5; see docs/decisions/generation-observations.md.
+    ollama_timeout_seconds: float = Field(default=300.0, gt=0)
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
     anthropic_base_url: str = "https://api.anthropic.com"
@@ -75,7 +78,7 @@ class Settings(BaseSettings):
     # Per-process cap on LLM answers in flight, and a deadline for a whole answer. A
     # per-tenant quota comes with the M7 rate limiter.
     chat_max_concurrent_answers: int = Field(default=4, ge=1, le=64)
-    llm_answer_deadline_seconds: float = Field(default=180.0, gt=0)
+    llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
 
     @model_validator(mode="after")
     def _anthropic_needs_a_key(self) -> "Settings":

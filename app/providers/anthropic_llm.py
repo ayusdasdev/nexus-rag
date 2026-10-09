@@ -84,7 +84,7 @@ class AnthropicProvider:
         self._base_url = base_url
         self._effort = effort
         self._min_max_tokens = min_max_tokens
-        self._timeout = timeout
+        self.timeout = timeout
         self._transport = transport
         self._sleep = sleep
         self._retry_delay = retry_delay
@@ -117,7 +117,7 @@ class AnthropicProvider:
             "anthropic-beta": FALLBACK_BETA,
         }
         async with httpx.AsyncClient(
-            base_url=self._base_url, timeout=self._timeout, transport=self._transport
+            base_url=self._base_url, timeout=self.timeout, transport=self._transport
         ) as client:
             request = client.build_request(
                 "POST", "/v1/messages", json=body, headers=headers

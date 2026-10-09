@@ -383,6 +383,15 @@ after `ollama stop llama3.2:3b` (5.1 GiB available):
 Rerank takes about 23 s for 30 pairs (about 0.77 s per pair) with or without Ollama loaded, so
 it's the cross-encoder on this CPU, not memory pressure. Every other stage takes milliseconds.
 
+## Change made after this run (2026-10-09)
+- `OLLAMA_TIMEOUT_SECONDS` (new, Ollama only) defaults to **300 s**, and
+  `LLM_ANSWER_DEADLINE_SECONDS` to **420 s** (was 180). Why: the cold Q1 above failed because
+  model load plus ~90 s of CPU prompt processing (~15 tokens/s on 1,348 tokens) outlasted the
+  shared 120 s timeout. The deadline is raised as well, because otherwise it would cut the same
+  cold start off at 180 s. Anthropic keeps `LLM_TIMEOUT_SECONDS=120`. Not yet re-measured: a
+  cold start under the new limits hasn't been run.
+- The rerank candidate count is unchanged; that's an M8 experiment.
+
 ## For M8 (hypotheses, not conclusions)
 - Latency on this machine is dominated by CPU rerank (~23 s) and CPU prompt processing
   (~15 tokens/s, so ~90 s for a 1,348-token prompt). Candidates for experiments: `RERANK=false`
