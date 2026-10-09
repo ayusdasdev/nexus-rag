@@ -8,15 +8,14 @@ first turn.
 import logging
 import re
 from collections.abc import Callable, Sequence
-from typing import Literal
 
+from app.core.config import RewriteMode
 from app.providers.llm import ChatMessage, LLMError, LLMProvider
 from app.services.generation import HistoryTurn, approx_tokens, neutralise
 from app.services.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
 
-RewriteMode = Literal["rule", "llm", "off"]
 
 __all__ = ["HistoryTurn", "is_follow_up", "rewrite_query", "trim_history"]
 

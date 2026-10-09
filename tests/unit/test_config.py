@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from app.core.config import Settings
 
@@ -47,3 +48,17 @@ def test_retrieval_switch_defaults() -> None:
 def test_retrieval_mode_rejects_an_unknown_value() -> None:
     with pytest.raises(ValueError, match="retrieval_mode"):
         Settings(retrieval_mode="keyword")
+
+
+def test_conversation_settings_default_to_rule_rewrites_and_a_500_token_history() -> (
+    None
+):
+    settings = Settings(_env_file=None)
+
+    assert settings.rewrite_mode == "rule"
+    assert settings.history_max_tokens == 500
+
+
+def test_history_must_leave_room_for_sources_in_the_shared_budget() -> None:
+    with pytest.raises(ValidationError, match="history_max_tokens"):
+        Settings(_env_file=None, max_context_tokens=500, history_max_tokens=500)

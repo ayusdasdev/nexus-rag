@@ -11,6 +11,7 @@ RetrievalMode = Literal["dense", "sparse", "hybrid"]
 Expand = Literal["none", "neighbors"]
 LLMProviderName = Literal["ollama", "anthropic"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
+RewriteMode = Literal["rule", "llm", "off"]
 
 
 class Settings(BaseSettings):
@@ -78,7 +79,16 @@ class Settings(BaseSettings):
     # Per-process cap on LLM answers in flight, and a deadline for a whole answer. A
     # per-tenant quota comes with the M7 rate limiter.
     chat_max_concurrent_answers: int = Field(default=4, ge=1, le=64)
+    # Conversations (ADR-0009): history shares max_context_tokens, capped at this.
+    history_max_tokens: int = Field(default=500, ge=0)
+    rewrite_mode: RewriteMode = "rule"
     llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
+
+    @model_validator(mode="after")
+    def _history_leaves_room_for_sources(self) -> "Settings":
+        if self.history_max_tokens >= self.max_context_tokens:
+            raise ValueError("history_max_tokens must be below max_context_tokens")
+        return self
 
     @model_validator(mode="after")
     def _anthropic_needs_a_key(self) -> "Settings":
