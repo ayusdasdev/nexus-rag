@@ -213,6 +213,13 @@ dependency).
 - [x] 7.2 RFC 9457 problem+json handlers and request-id middleware (`b10c839`): every 4xx/5xx
   incl. unknown routes and unhandled errors; safe incoming ids echoed, others replaced; ids
   on every log record; 422s list errors without echoing input.
+- [x] 7.2 (added) Migration `3ccf8af42a82` (`2ff30a2`): composite FK
+  `conversations(user_id, tenant_id)` -> `users(id, tenant_id)`, test first; the upgrade
+  refuses on mismatched rows (checked with a probe row). **Incident:** while checking it I
+  chained commands after a failed `make migrate`; `alembic downgrade -1` then dropped and
+  recreated the `conversations`/`messages` tables in the local dev DB. Lost: test leftovers
+  and the M6 6.5 demo conversation (its output is in `generation-observations.md`).
+  Documents, chunks, users and Qdrant were untouched.
 - [ ] 7.2 Cursor pagination (opaque, tenant-scoped, invalid cursor gives 422, capped limit) on
   documents, chunks and conversations.
 - [ ] 7.2 Per-tenant Redis token-bucket rate limiter (reads vs `/chat`), 429 + `Retry-After` +
