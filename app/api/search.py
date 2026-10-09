@@ -3,17 +3,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentUser, get_current_user, get_tenant_id
+from app.api.retrieval_errors import retrieval_errors
 from app.core.config import Settings, get_settings
-from app.core.errors import TransientError
 from app.models.user import UserRole
-from app.providers.embeddings import ModelNotCached
 from app.providers.reranker import Reranker, get_reranker
 from app.repositories import chunk_repository
-from app.repositories.vector_store import (
-    VectorStore,
-    VectorStoreRejected,
-    get_vector_store,
-)
+from app.repositories.vector_store import VectorStore, get_vector_store
 from app.schemas.search import (
     NeighborChunk,
     RankedItemResponse,
@@ -71,7 +66,7 @@ async def search(
             detail="debug=true is limited to admins",
         )
     mode = request.mode if request.mode is not None else settings.retrieval_mode
-    try:
+    with retrieval_errors():
         result = await retrieve(
             store=store,
             reranker=reranker,
@@ -94,21 +89,6 @@ async def search(
             expand=request.expand if request.expand is not None else settings.expand,
             trace=request.debug,
         )
-    except TransientError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Vector store is temporarily unavailable; retry the search",
-        ) from exc
-    except ModelNotCached as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The search service is not fully configured; try again later",
-        ) from exc
-    except VectorStoreRejected as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Search failed due to an internal error",
-        ) from exc
     return SearchResponse(
         items=[
             SearchHit(
