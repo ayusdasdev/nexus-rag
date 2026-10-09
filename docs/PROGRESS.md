@@ -94,7 +94,7 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
 - Not acted on: the reviewer flagged a possible E501 in `app/api/search.py`, but
   `make lint` passes, so that was a false positive.
 
-## M5: Generation, streaming, citations
+## M5: Generation, streaming, citations (closed 2026-10-09)
 
 - [x] 5.1 ADR-0007 prompt-injection defence, from your four layers (`35cd4ba`). The SSE schema
   goes in the 5.4 ADR.
@@ -106,9 +106,7 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
     the model), `max_tokens` raised to 16000 because thinking counts toward it.
   - `LLM_PROVIDER=anthropic` without a key fails at startup; `build_llm` refuses too.
   - httpx moved dev -> runtime, logged in `dependencies.md`. All tests use `MockTransport`.
-- [?] Ollama `llama3.2:3b` inside WSL: approved, but **sudo needs a password**, so you run
-  the zstd and install commands with `!`. Nothing is installed yet. Install is about 1.44 GB
-  plus `zstd`; the model is about 2.02 GB.
+- [x] Ollama 0.40.2 and `llama3.2:3b` installed inside WSL (by you).
 - [x] Dependencies: option B, no anthropic SDK. `AnthropicProvider` uses our own httpx.
 - [x] 5.3 `app/prompts/rag_system.md` and `rag_user.md`, loaded at runtime by `load_prompt`;
   CLAUDE.md line added (`48b9362`).
@@ -122,8 +120,15 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   `X-Accel-Buffering: no`; disconnect closes the LLM stream; empty retrieval refuses with zero
   LLM calls. Tests: event order, newline in a token, refusal, invalid citation stripped,
   tenant isolation in `sources`, 401, 422 (incl. `tenant_id`), 503 without an LLM.
-- [ ] 5.5 Manual run against Ollama: answerable, unanswerable and poisoned documents. Report
-  observations as written. **Blocked:** Ollama isn't installed (sudo needs your password).
+- [x] 5.5 Manual run against Ollama `llama3.2:3b` (CPU only), raw streams and timings in
+  `docs/decisions/generation-observations.md`:
+  - Q1 answerable, cold: **timed out** (`llm_unavailable`, 181.51 s). Cold load plus a
+    1,348-token prompt at ~15 tokens/s took longer than `LLM_TIMEOUT_SECONDS=120`. Repeated
+    warm: correct and cited `[1]`, 33.77 s (Ollama's prompt cache helped).
+  - Q2 unanswerable: refused with the exact refusal text, 92.78 s.
+  - Q3 poisoned: injection **not** followed, but the format was ignored: prompt scaffolding
+    echoed, answer right but uncited, 66.92 s.
+  - Rerank takes ~23 s for 30 pairs on this CPU, with or without Ollama loaded.
 - [x] security-reviewer subagent on `7d2986c..1f2b4e6`: 1 high, 3 medium, all fixed with tests
   first (`951279c`, `3b108de`, `9e3fd25`):
   - HIGH: quadratic citation regex (40k spaces: 9.25 s, measured) -> bounded, linear.
@@ -135,8 +140,11 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   - Lows fixed: NaN/negative `retry-after`, https base URL in production, fullwidth and
     zero-width tag lookalikes. Not fixed (info): one retry may double-bill if the first call
     was processed; provider JSON error text isn't length-capped in logs.
-- [x] M5 checks (`9e3fd25`): `make lint` pass, `make test` **295 passed**, `make test-int`
-  **155 passed** (run alone, no Ollama model loaded, no 401).
+- [x] M5 close checks (after 5.5, Ollama stopped, run one at a time): `make lint` pass,
+  `make test` **295 passed**, `make test-int` **155 passed**, no 401.
+- For M8 (from 5.5): CPU rerank and prompt processing dominate latency; 120 s LLM timeout is
+  too short for a cold CPU start; measure citation-format adherence of the 3B model; consider
+  stripping echoed `<document>`/`<question>` scaffolding from answers.
 
 ## M6: Conversations, memory, query rewriting
 
