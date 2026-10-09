@@ -96,7 +96,8 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
 
 ## M5: Generation, streaming, citations
 
-- [ ] 5.1 ADR: prompt design, SSE event schema, citation validation, injection mitigations.
+- [x] 5.1 ADR-0007 prompt-injection defence, from your four layers (`35cd4ba`). The SSE schema
+  goes in the 5.4 ADR.
 - [ ] 5.2 `app/providers/llm.py`: `LLMProvider` Protocol (`stream`, `complete`, `name`). It has:
   - `FakeLLM` (scripted tokens) for tests.
   - `OllamaProvider` over HTTP (`OLLAMA_URL`, `OLLAMA_MODEL`) using httpx, not an extra SDK.
@@ -105,17 +106,17 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
     are skipped without the key.
   - `get_llm()` factory.
   New deps: `anthropic`, and `httpx` moves to runtime. Both explained in chat first.
-- [?] Ollama `llama3.2:3b` inside WSL (your choice). Not installed yet. Install is about
-  1.44 GB plus `zstd`, and the model is about 2.02 GB. Waiting for your OK to download.
-- [?] Dependencies: every `anthropic` release since 1.6.0 needs `httpx2` (pydantic's httpx
-  successor), not `httpx`. Proposal in chat; waiting for your OK.
-- [?] 5.1 prompt-injection defence: you explain it first, then the ADR.
-- [ ] 5.3 `app/prompts/rag_system.md` and the user template, loaded at runtime. Add a CLAUDE.md line:
-  prompts live in `app/prompts/`.
-- [ ] 5.3 `app/services/generation.py` pure functions: `build_messages` (context budget
+- [?] Ollama `llama3.2:3b` inside WSL: approved, but **sudo needs a password**, so you run
+  the zstd and install commands with `!`. Nothing is installed yet. Install is about 1.44 GB
+  plus `zstd`; the model is about 2.02 GB.
+- [x] Dependencies: option B, no anthropic SDK. `AnthropicProvider` uses our own httpx.
+- [x] 5.3 `app/prompts/rag_system.md` and `rag_user.md`, loaded at runtime by `load_prompt`;
+  CLAUDE.md line added (`48b9362`).
+- [x] 5.3 (`6061bfa` LLMProvider + FakeLLM, `da68456`) `app/services/generation.py` pure functions: `build_messages` (context budget
   `MAX_CONTEXT_TOKENS`, best-first) and `parse_citations` (`[1]`, `[1][3]`, `[2, 3]`,
   out-of-range numbers stripped and counted). Snapshot test of the rendered prompt; poisoned
-  source rendered verbatim inside its tag.
+  source rendered verbatim inside its tag. Four attack documents, checked to fail when the
+  neutraliser or the citation range check is disabled.
 - [ ] 5.4 `POST /v1/chat` (SSE): events `sources` -> `token`* -> `citations` -> `done`, and `error`.
   JSON `data:`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`, stops on disconnect.
   Empty retrieval refuses with zero LLM calls. Tests use FakeLLM: event order, a newline inside a
