@@ -44,6 +44,15 @@ def _events(response: Response) -> list[tuple[str, dict[str, Any]]]:
     return events
 
 
+def _same_problem(theirs: Response, missing: Response) -> bool:
+    """Identical bodies apart from each response's own request_id (M7 problem+json)."""
+    for response in (theirs, missing):
+        assert response.json()["request_id"] == response.headers["x-request-id"]
+    a, b = dict(theirs.json()), dict(missing.json())
+    a.pop("request_id"), b.pop("request_id")
+    return a == b
+
+
 async def _message_count(conversation_id: str) -> int:
     async with session_scope() as session:
         count = await session.scalar(
@@ -93,7 +102,7 @@ async def test_get_of_someone_elses_conversation_is_404_like_a_missing_one(
     )
 
     assert theirs.status_code == 404
-    assert theirs.json() == missing.json()
+    assert _same_problem(theirs, missing)
 
 
 @pytest.mark.parametrize("kind", INTRUDERS)
@@ -120,7 +129,7 @@ async def test_posting_to_someone_elses_conversation_is_404_and_writes_nothing(
     )
 
     assert theirs.status_code == 404
-    assert theirs.json() == missing.json()
+    assert _same_problem(theirs, missing)
     assert await _message_count(conversation_id) == before
     assert len(fake_llm.calls) == calls
 
@@ -139,7 +148,7 @@ async def test_deleting_someone_elses_conversation_is_404_and_it_survives(
     )
 
     assert theirs.status_code == 404
-    assert theirs.json() == missing.json()
+    assert _same_problem(theirs, missing)
     assert (await client.get(url, headers=owner.headers)).status_code == 200
     assert (await client.delete(url, headers=owner.headers)).status_code == 204
 

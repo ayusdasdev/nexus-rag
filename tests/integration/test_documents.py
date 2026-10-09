@@ -516,7 +516,14 @@ async def test_delete_unknown_document_returns_404_with_detail(
     )
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Document not found"}
+    # RFC 9457 problem+json since M7; same detail as before.
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "Document not found",
+        "request_id": response.headers["x-request-id"],
+    }
 
 
 async def test_delete_malformed_id_returns_422(

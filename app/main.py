@@ -8,7 +8,10 @@ from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
+from app.api.problems import install_problem_handlers
+from app.api.request_id import RequestIdMiddleware
 from app.api.search import router as search_router
+from app.core.request_context import install_log_record_factory
 from app.repositories.session import dispose_engine
 
 
@@ -19,7 +22,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    install_log_record_factory()
     app = FastAPI(title="Nexus RAG", lifespan=lifespan)
+    install_problem_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router)
     # Same router, mounted again under /v1 - versions the whole auth
@@ -30,6 +35,8 @@ def create_app() -> FastAPI:
     app.include_router(search_router, prefix="/v1")
     app.include_router(chat_router, prefix="/v1")
     app.include_router(conversations_router, prefix="/v1")
+    # Added last, so it is the outermost middleware and sees every error.
+    app.add_middleware(RequestIdMiddleware)
     return app
 
 
