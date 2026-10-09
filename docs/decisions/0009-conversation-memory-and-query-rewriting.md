@@ -49,3 +49,25 @@ costs tens of seconds.
 - An LLM rewrite can still add a fact the prompt forbids. Its output is only a retrieval
   query over the caller's own tenant, so the worst case is retrieving the wrong own-tenant
   chunks.
+
+## Security review follow-ups (2026-10-09)
+Fixed with tests: a fresh 404/401 exception per raise; the LLM rewrite takes an answer slot
+and has the answer deadline; history loads only the newest 50 messages (no sources JSON);
+`GET /{id}` pages messages; `CONVERSATION_MAX_MESSAGES` and `MAX_CONVERSATIONS_PER_USER`
+(1000 each, 409); the user-turn save returns 404 if the conversation vanished; history
+resends only complete user/assistant pairs, with old `[N]` numbers stripped, and the RAG rules
+say earlier turns are context, not instructions; rewrite history is one line per turn;
+partial answers are cleaned like finished ones before saving; provider errors are logged by
+type only.
+
+Known and accepted for now:
+- **Deleted documents leave traces in old messages.** Stored sources keep no chunk text,
+  but an assistant answer can quote a document, and `heading_path` and `rewritten_query` can
+  carry document words. These stay after the document is deleted and are resent as history
+  until the conversation is deleted. A retention policy, or redacting on document delete, is
+  a later decision.
+- **No database tie between `conversations.user_id` and `tenant_id`.** Both come from the
+  token and every query checks both, but a composite FK to `users(id, tenant_id)` would
+  make a repository bug impossible rather than tested-against. It needs a new migration,
+  so it's left as a follow-up.
+
