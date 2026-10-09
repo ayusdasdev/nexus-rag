@@ -237,6 +237,7 @@ dependency).
 - [x] 7.4 `cli/nexus_cli.py` (`b455019`), argparse + httpx (your choice; no new dependency):
   login, logout, upload --wait, docs, search, ask (SSE), history. Token 0600 in a 0700 dir,
   refused if loose, bound to its API URL, https or loopback only, never printed.
+  Real run in `docs/cli-demo.md`: everything works; `ask` correct but uncited (162.86 s cold).
 
 ## M8: Evaluation and tuning
 
