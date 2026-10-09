@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_JWT_SECRET = "dev-insecure-secret-change-me-before-deploying"
@@ -9,6 +9,8 @@ _DEFAULT_JWT_SECRET = "dev-insecure-secret-change-me-before-deploying"
 RetrievalMode = Literal["dense", "sparse", "hybrid"]
 # "parent" joins when parent_child chunking exists; until then it is not accepted.
 Expand = Literal["none", "neighbors"]
+LLMProviderName = Literal["ollama", "anthropic"]
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
 class Settings(BaseSettings):
@@ -54,6 +56,31 @@ class Settings(BaseSettings):
     # Clock-skew tolerance for iat and exp. It also lets a token live up to this long
     # past exp, so keep it small (ADR-0006).
     jwt_leeway_seconds: int = Field(default=5, ge=0, le=60)
+
+    # Generation (M5). Ollama is the default; Anthropic needs ANTHROPIC_API_KEY.
+    llm_provider: LLMProviderName = "ollama"
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:3b"
+    ollama_num_ctx: int = Field(default=4096, ge=512)
+    anthropic_api_key: SecretStr | None = None
+    anthropic_model: str = "claude-opus-5-5"
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_effort: Effort = "medium"
+    # Thinking counts toward max_tokens on the default model, so requests ask for at least this.
+    anthropic_max_tokens: int = Field(default=16000, ge=1024)
+    llm_timeout_seconds: float = Field(default=120.0, gt=0)
+    # Budget for retrieved text in the prompt, and for the answer itself.
+    max_context_tokens: int = Field(default=2500, ge=100)
+    answer_max_tokens: int = Field(default=512, ge=16)
+
+    @model_validator(mode="after")
+    def _anthropic_needs_a_key(self) -> "Settings":
+        if self.llm_provider == "anthropic" and (
+            self.anthropic_api_key is None
+            or not self.anthropic_api_key.get_secret_value()
+        ):
+            raise ValueError("LLM_PROVIDER=anthropic needs ANTHROPIC_API_KEY to be set")
+        return self
 
     @model_validator(mode="after")
     def _forbid_default_jwt_secret_in_production(self) -> "Settings":
