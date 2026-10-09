@@ -8,6 +8,7 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Literal
 from uuid import UUID
 
 from app.providers.llm import ChatMessage
@@ -20,6 +21,14 @@ class ContextChunk:
     document_id: UUID
     text: str
     heading_path: str | None = None
+
+
+@dataclass(frozen=True)
+class HistoryTurn:
+    """One earlier turn of a conversation, resent so the model has memory (ADR-0009)."""
+
+    role: Literal["user", "assistant"]
+    content: str
 
 
 @dataclass(frozen=True)
@@ -87,6 +96,7 @@ def build_messages(
     *,
     max_context_tokens: int,
     count_tokens: Callable[[str], int] = approx_tokens,
+    history: Sequence[HistoryTurn] = (),
 ) -> BuiltPrompt:
     """System rules plus one user message with numbered documents and the question.
 
@@ -95,7 +105,8 @@ def build_messages(
     go in. Numbering is contiguous over what was sent.
     """
     sources: list[ContextChunk] = []
-    used = 0
+    # History (already trimmed by the caller) shares the budget and is paid for first.
+    used = sum(count_tokens(turn.content) for turn in history)
     for chunk in chunks:
         cost = count_tokens(chunk.text) + count_tokens(chunk.heading_path or "")
         if used + cost > max_context_tokens:
@@ -112,6 +123,10 @@ def build_messages(
     return BuiltPrompt(
         messages=[
             ChatMessage(role="system", content=load_prompt("rag_system")),
+            *(
+                ChatMessage(role=t.role, content=_neutralise(t.content))
+                for t in history
+            ),
             ChatMessage(role="user", content=user),
         ],
         sources=sources,

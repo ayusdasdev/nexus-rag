@@ -8,26 +8,20 @@ first turn.
 import logging
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from typing import Literal
 
 from app.providers.llm import ChatMessage, LLMError, LLMProvider
-from app.services.generation import approx_tokens, neutralise
+from app.services.generation import HistoryTurn, approx_tokens, neutralise
 from app.services.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
 
 RewriteMode = Literal["rule", "llm", "off"]
-Role = Literal["user", "assistant"]
+
+__all__ = ["HistoryTurn", "is_follow_up", "rewrite_query", "trim_history"]
 
 REWRITE_MAX_TOKENS = 64
 _TAGS = "history|question"
-
-
-@dataclass(frozen=True)
-class HistoryTurn:
-    role: Role
-    content: str
 
 
 def trim_history(

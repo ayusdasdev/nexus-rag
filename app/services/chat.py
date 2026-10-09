@@ -22,6 +22,7 @@ from app.providers.llm import (
 )
 from app.services.generation import (
     ContextChunk,
+    HistoryTurn,
     build_messages,
     find_external_links,
     parse_citations,
@@ -98,6 +99,8 @@ async def answer_events(
     answer_max_tokens: int,
     deadline_seconds: float | None = None,
     slots: asyncio.Semaphore | None = None,
+    history: Sequence[HistoryTurn] = (),
+    rewritten_query: str | None = None,
 ) -> AsyncGenerator[ChatEvent, None]:
     """Events for one answer. items are tenant-scoped retrieval results, best first.
 
@@ -110,27 +113,29 @@ async def answer_events(
         question,
         [_context(item) for item in items],
         max_context_tokens=max_context_tokens,
+        history=history,
     )
     if built.sources and slots is not None and slots.locked():
         yield _BUSY_ERROR
         return
     by_chunk = {item.chunk_id: item for item in items}
-    yield ChatEvent(
-        "sources",
-        {
-            "sources": [
-                {
-                    "number": number,
-                    "chunk_id": str(source.chunk_id),
-                    "document_id": str(source.document_id),
-                    "chunk_index": by_chunk[source.chunk_id].chunk_index,
-                    "heading_path": source.heading_path,
-                    "text": source.text,
-                }
-                for number, source in enumerate(built.sources, start=1)
-            ]
-        },
-    )
+    sources: dict[str, Any] = {
+        "sources": [
+            {
+                "number": number,
+                "chunk_id": str(source.chunk_id),
+                "document_id": str(source.document_id),
+                "chunk_index": by_chunk[source.chunk_id].chunk_index,
+                "heading_path": source.heading_path,
+                "text": source.text,
+            }
+            for number, source in enumerate(built.sources, start=1)
+        ]
+    }
+    if rewritten_query is not None:
+        # Conversations show the query retrieval actually used (guide 6.3).
+        sources["rewritten_query"] = rewritten_query
+    yield ChatEvent("sources", sources)
 
     if not built.sources:
         yield ChatEvent("token", {"text": REFUSAL})

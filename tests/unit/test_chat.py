@@ -398,3 +398,38 @@ async def test_done_answer_has_echoed_prompt_wrappers_stripped() -> None:
     assert events[1].data == {"text": echoed}
     assert events[-1].data["answer"] == "Charging takes two hours.\n\nTwo hours [1]."
     assert [c["number"] for c in events[-2].data["citations"]] == [1]
+
+
+@pytest.mark.asyncio
+async def test_history_and_the_rewritten_query_reach_the_prompt_and_sources_event() -> (
+    None
+):
+    from app.services.generation import HistoryTurn
+
+    llm = FakeLLM(["Drain fully [1]."])
+    events = [
+        event
+        async for event in answer_events(
+            "And calibration?",
+            [_hit("Battery calibration: drain fully.")],
+            llm,
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+            history=[HistoryTurn("user", "How long does charging take?")],
+            rewritten_query="How long does charging take? And calibration?",
+        )
+    ]
+
+    assert (
+        events[0].data["rewritten_query"]
+        == "How long does charging take? And calibration?"
+    )
+    assert [m.role for m in llm.calls[0]] == ["system", "user", "user"]
+    assert llm.calls[0][1].content == "How long does charging take?"
+
+
+@pytest.mark.asyncio
+async def test_the_stateless_chat_sources_event_has_no_rewritten_query() -> None:
+    events = await _events([_hit("Charging takes two hours.")], FakeLLM(["ok [1]."]))
+
+    assert "rewritten_query" not in events[0].data
