@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator, Sequence
@@ -216,3 +217,169 @@ def test_format_sse_keeps_a_newline_inside_a_token_on_one_data_line() -> None:
     assert json.loads(data_line.removeprefix("data: ")) == {
         "text": "line one\nline two"
     }
+
+
+# --- M5 security review fixes -----------------------------------------------------
+
+
+class _BrokenLLM:
+    """A provider bug: malformed JSON surfacing as TypeError, not an LLMError."""
+
+    name = "broken"
+
+    async def stream(
+        self,
+        messages: Sequence[ChatMessage],
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+    ) -> AsyncIterator[str]:
+        yield "Two "
+        raise TypeError("'NoneType' object is not subscriptable")
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_exception_mid_stream_still_ends_with_an_error_event() -> (
+    None
+):
+    events = await _events([_hit("Charging takes two hours.")], _BrokenLLM())
+
+    assert [e.event for e in events] == ["sources", "token", "error"]
+    assert events[-1].data == {
+        "code": "llm_error",
+        "message": "The answer could not be generated.",
+    }
+
+
+class _SlowLLM:
+    name = "slow"
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def stream(
+        self,
+        messages: Sequence[ChatMessage],
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+    ) -> AsyncIterator[str]:
+        try:
+            yield "Two "
+            await asyncio.sleep(60)
+            yield "never"
+        finally:
+            self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_an_answer_past_the_total_deadline_ends_with_a_timeout_error() -> None:
+    llm = _SlowLLM()
+
+    events = [
+        event
+        async for event in answer_events(
+            "q",
+            [_hit("Charging takes two hours.")],
+            llm,  # type: ignore[arg-type]
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+            deadline_seconds=0.2,
+        )
+    ]
+
+    assert [e.event for e in events] == ["sources", "token", "error"]
+    assert events[-1].data["code"] == "llm_timeout"
+    assert llm.closed is True
+
+
+@pytest.mark.asyncio
+async def test_cancelling_the_request_task_closes_the_llm_stream() -> None:
+    # What Starlette does on client disconnect: cancel the task iterating the stream.
+    llm = _SlowLLM()
+    first_token = asyncio.Event()
+
+    async def consume() -> None:
+        async for event in answer_events(
+            "q",
+            [_hit("Charging takes two hours.")],
+            llm,  # type: ignore[arg-type]
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+        ):
+            if event.event == "token":
+                first_token.set()
+
+    task = asyncio.create_task(consume())
+    await first_token.wait()
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert llm.closed is True
+
+
+@pytest.mark.asyncio
+async def test_when_every_answer_slot_is_taken_the_reply_is_busy_with_no_llm_call() -> (
+    None
+):
+    slots = asyncio.Semaphore(1)
+    await slots.acquire()
+    llm = FakeLLM(["unused"])
+
+    events = [
+        event
+        async for event in answer_events(
+            "q",
+            [_hit("Charging takes two hours.")],
+            llm,
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+            slots=slots,
+        )
+    ]
+
+    assert [e.event for e in events] == ["error"]
+    assert events[0].data["code"] == "llm_busy"
+    assert llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_needs_no_answer_slot() -> None:
+    slots = asyncio.Semaphore(1)
+    await slots.acquire()
+
+    events = [
+        event
+        async for event in answer_events(
+            "q",
+            [],
+            FakeLLM([]),
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+            slots=slots,
+        )
+    ]
+
+    assert events[-1].data["refused"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_answer_releases_its_slot_when_done() -> None:
+    slots = asyncio.Semaphore(1)
+
+    await _consume_with_slots(slots)
+    await _consume_with_slots(slots)
+
+    assert not slots.locked()
+
+
+async def _consume_with_slots(slots: asyncio.Semaphore) -> None:
+    async for _event in answer_events(
+        "q",
+        [_hit("Charging takes two hours.")],
+        FakeLLM(["ok [1]."]),
+        max_context_tokens=2000,
+        answer_max_tokens=64,
+        slots=slots,
+    ):
+        pass

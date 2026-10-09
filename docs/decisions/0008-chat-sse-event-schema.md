@@ -32,6 +32,18 @@ answer are never fetched.
   `done.refused` is true, and the LLM is never called.
 - A client disconnect stops the generator, which closes the provider's HTTP stream.
 
+## Limits (from the M5 security review)
+- At most `CHAT_MAX_CONCURRENT_ANSWERS` (default 4) LLM answers run at once per process. When
+  all are taken, the stream is a single `error` event `llm_busy` and no LLM call is made. A
+  refusal needs no slot.
+- `LLM_ANSWER_DEADLINE_SECONDS` (default 180) bounds a whole answer, not each read. Past it,
+  the stream ends with `llm_timeout` and the provider stream is closed.
+- Any unexpected exception during generation ends with a generic `llm_error` event, never a
+  truncated stream.
+- Cost: on Anthropic every answer may use up to `ANTHROPIC_MAX_TOKENS` (16000) because
+  thinking counts toward `max_tokens`, so `ANSWER_MAX_TOKENS` is a floor-raised value there.
+  There is no per-tenant quota yet; that comes with the M7 per-tenant rate limiter.
+
 ## Alternatives considered
 - Validating citations per token while streaming: citations can be split across tokens
   (`[1` then `]`), so a final validated `answer` is simpler and exact.

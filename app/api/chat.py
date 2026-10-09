@@ -1,4 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
+from functools import lru_cache
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -43,6 +45,18 @@ def get_chat_llm(
         ) from exc
 
 
+@lru_cache
+def _slots(size: int) -> asyncio.Semaphore:
+    return asyncio.Semaphore(size)
+
+
+def get_answer_slots(
+    settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
+) -> asyncio.Semaphore:
+    """The process-wide cap on LLM answers in flight (CHAT_MAX_CONCURRENT_ANSWERS)."""
+    return _slots(settings.chat_max_concurrent_answers)
+
+
 @router.post(
     "",
     summary="Answer a question from the tenant's documents (SSE stream)",
@@ -74,6 +88,7 @@ async def chat(
     store: VectorStore = Depends(get_vector_store),  # noqa: B008 - FastAPI DI pattern
     reranker: Reranker = Depends(get_reranker),  # noqa: B008 - FastAPI DI pattern
     llm: LLMProvider = Depends(get_chat_llm),  # noqa: B008 - FastAPI DI pattern
+    slots: asyncio.Semaphore = Depends(get_answer_slots),  # noqa: B008
     settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
 ) -> StreamingResponse:
     """Retrieve from the caller's ready documents, then stream a cited answer.
@@ -82,7 +97,8 @@ async def chat(
     responses. The stream sends `sources` (numbered chunks), `token` events as the model
     writes, `citations` (only numbers that map to a sent source; others are dropped), and
     `done` with the cleaned answer. Nothing retrieved means a refusal with no LLM call. A
-    provider failure mid-answer ends the stream with an `error` event. The answer is plain
+    provider failure mid-answer, a busy server (all answer slots taken) or an answer past
+    its total deadline ends the stream with an `error` event. The answer is plain
     text: links in it are reported in `done.external_links`, never fetched (ADR-0007).
     """
     mode = settings.retrieval_mode
@@ -110,6 +126,8 @@ async def chat(
             llm,
             max_context_tokens=settings.max_context_tokens,
             answer_max_tokens=settings.answer_max_tokens,
+            deadline_seconds=settings.llm_answer_deadline_seconds,
+            slots=slots,
         ):
             yield format_sse(event)
 

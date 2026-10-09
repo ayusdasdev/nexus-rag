@@ -4,6 +4,7 @@ Chunks and vectors are seeded straight into Postgres and a per-test Qdrant colle
 with the fake embedders and reranker; the LLM is FakeLLM. No model downloads, no network.
 """
 
+import asyncio
 import json
 import uuid
 from collections.abc import Iterator
@@ -14,7 +15,7 @@ import pytest
 from httpx import AsyncClient, Response
 from qdrant_client import QdrantClient
 
-from app.api.chat import get_chat_llm
+from app.api.chat import get_answer_slots, get_chat_llm
 from app.api.documents import get_task_queue
 from app.core.config import Settings, get_settings
 from app.core.ids import chunk_id
@@ -286,3 +287,53 @@ async def test_chat_with_no_llm_configured_is_503_before_streaming(
 
     assert response.status_code == 503
     assert "ANTHROPIC_API_KEY" not in response.text
+
+
+async def test_chat_when_every_answer_slot_is_taken_streams_busy_without_an_llm_call(
+    client: AsyncClient, store: VectorStore, llm: FakeLLM
+) -> None:
+    tenant = await _tenant(client)
+    await _seed(client, store, tenant)
+    full = asyncio.Semaphore(1)
+    await full.acquire()
+    app.dependency_overrides[get_answer_slots] = lambda: full
+    try:
+        response = await client.post(
+            CHAT_URL, headers=tenant["headers"], json={"question": QUESTION}
+        )
+    finally:
+        app.dependency_overrides.pop(get_answer_slots, None)
+
+    assert response.status_code == 200
+    assert _events(response) == [
+        (
+            "error",
+            {
+                "code": "llm_busy",
+                "message": "The answer service is busy; retry shortly.",
+            },
+        )
+    ]
+    assert llm.calls == []
+
+
+async def test_chat_restricted_to_another_tenants_document_refuses(
+    client: AsyncClient, store: VectorStore, llm: FakeLLM
+) -> None:
+    tenant_a = await _tenant(client)
+    await _seed(client, store, tenant_a)
+    listing = await client.get("/v1/documents", headers=tenant_a["headers"])
+    foreign_document = listing.json()["items"][0]["id"]
+    tenant_b = await _tenant(client)
+    await _seed(client, store, tenant_b)
+
+    response = await client.post(
+        CHAT_URL,
+        headers=tenant_b["headers"],
+        json={"question": QUESTION, "document_ids": [foreign_document]},
+    )
+
+    events = _events(response)
+    assert events[0] == ("sources", {"sources": []})
+    assert events[-1][1]["refused"] is True
+    assert llm.calls == []
