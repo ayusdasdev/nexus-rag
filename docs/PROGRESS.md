@@ -146,7 +146,19 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   too short for a cold CPU start; measure citation-format adherence of the 3B model; consider
   stripping echoed `<document>`/`<question>` scaffolding from answers.
 
+## Between M5 and M6 (2026-10-09)
+
+- [x] `done.answer` strips echoed `<document ...>`/`<question>` wrappers, tested with the exact
+  Q3 output (`b718299`).
+- [x] `OLLAMA_TIMEOUT_SECONDS=300` (Ollama only), `LLM_ANSWER_DEADLINE_SECONDS` 180 -> 420
+  (`c2f9e9d`). A cold start under the new limits isn't re-measured yet.
+
 ## M6: Conversations, memory, query rewriting
+
+Your decisions (2026-10-09): rewriting `REWRITE_MODE=rule|llm|off`, default `rule`, both built;
+history shares `MAX_CONTEXT_TOKENS` (2500), capped at `HISTORY_MAX_TOKENS=500`, most recent
+first; conversations are owner-only (admins get 404 too).
+
 
 - [ ] 6.1 New migration: `conversations`, `messages` (index `(conversation_id, created_at)`).
   Repositories scoped by `tenant_id` AND `user_id`.
