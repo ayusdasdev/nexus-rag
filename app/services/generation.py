@@ -44,8 +44,14 @@ def approx_tokens(text: str) -> int:
     return math.ceil(len(text) / 4)
 
 
-# A "<" that would open or close one of our own sections, inside untrusted text.
-_DELIMITER = re.compile(r"<(?=\s*/?\s*(?:documents?|question)\b)", re.IGNORECASE)
+# A "<" (or a fullwidth/small lookalike, optionally padded with zero-width characters)
+# that would open or close one of our own sections, inside untrusted text.
+_ZERO_WIDTH = "\u200b\u200c\u200d\u2060\ufeff"
+_DELIMITER = re.compile(
+    rf"[<\uff1c\ufe64][{_ZERO_WIDTH}]{{0,8}}"
+    rf"(?=[\s{_ZERO_WIDTH}]{{0,8}}/?[\s{_ZERO_WIDTH}]{{0,8}}(?:documents?|question)\b)",
+    re.IGNORECASE,
+)
 _SLOT = re.compile(r"\{\{(documents|question)\}\}")
 
 
@@ -101,34 +107,42 @@ def build_messages(
     )
 
 
-_CITATION = re.compile(r"(\s*)\[(\s*\d+\s*(?:,\s*\d+\s*)*)\]")
+# Bounded everywhere, so matching stays linear on any model output (ReDoS fix), and a
+# 5-digit-or-longer number is never a citation (int() of thousands of digits raises).
+_NUM = r"\s{0,8}\d{1,4}\s{0,8}"
+_CITATION = re.compile(rf"\[({_NUM}(?:,{_NUM}){{0,49}})\]")
 
 
 def parse_citations(text: str, source_count: int) -> Citations:
     """Keep citations to documents 1..source_count; strip and report any other number.
 
     Reads [1], [1][3] and [2, 3]. A citation left with no valid number is removed
-    together with the whitespace before it.
+    together with the spaces before it.
     """
     numbers: list[int] = []
     dropped: list[int] = []
-
-    def replace(match: re.Match[str]) -> str:
-        cited = [int(part) for part in match.group(2).split(",")]
+    out: list[str] = []
+    last = 0
+    for match in _CITATION.finditer(text):
+        cited = [int(part) for part in match.group(1).split(",")]
         kept = [n for n in cited if 1 <= n <= source_count]
         for n in cited:
             target = numbers if n in kept else dropped
             if n not in target:
                 target.append(n)
+        before = text[last : match.start()]
         if len(kept) == len(cited):
-            return match.group(0)
-        if not kept:
-            return ""
-        return match.group(1) + "[" + ", ".join(str(n) for n in kept) + "]"
-
-    return Citations(
-        text=_CITATION.sub(replace, text), numbers=numbers, dropped=dropped
-    )
+            replacement = match.group(0)
+        elif kept:
+            replacement = "[" + ", ".join(str(n) for n in kept) + "]"
+        else:
+            replacement = ""
+            before = before.rstrip(" \t")
+        out.append(before)
+        out.append(replacement)
+        last = match.end()
+    out.append(text[last:])
+    return Citations(text="".join(out), numbers=numbers, dropped=dropped)
 
 
 _URL = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
