@@ -23,8 +23,8 @@ from app.schemas.chat import (
     SourcesEvent,
     TokenEvent,
 )
-from app.services.chat import answer_events, format_sse
-from app.services.retrieval import retrieve
+from app.services.chat import ChatEvent, answer_events, format_sse
+from app.services.retrieval import RetrievedChunk, retrieve
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -55,6 +55,48 @@ def get_answer_slots(
 ) -> asyncio.Semaphore:
     """The process-wide cap on LLM answers in flight (CHAT_MAX_CONCURRENT_ANSWERS)."""
     return _slots(settings.chat_max_concurrent_answers)
+
+
+async def retrieve_for_answer(
+    store: VectorStore,
+    reranker: Reranker,
+    settings: Settings,
+    *,
+    tenant_id: UUID,
+    query: str,
+    document_ids: list[UUID] | None,
+    limit: int,
+) -> list[RetrievedChunk]:
+    """Tenant-scoped, ready-only retrieval with the deployment's switches, run before a
+    stream opens so its failures are ordinary HTTP errors. Shared with conversations."""
+    mode = settings.retrieval_mode
+    with retrieval_errors():
+        result = await retrieve(
+            store=store,
+            reranker=reranker,
+            fetch_chunks=chunk_repository.fetch_chunks,
+            fetch_neighbors=chunk_repository.fetch_neighbors,
+            tenant_id=tenant_id,
+            query=query,
+            document_ids=document_ids,
+            limit=limit,
+            candidates=settings.candidates,
+            use_dense=mode in ("dense", "hybrid"),
+            use_sparse=mode in ("sparse", "hybrid"),
+            use_rerank=settings.rerank,
+            expand=settings.expand,
+        )
+    return result.items
+
+
+def sse_response(events: AsyncIterator[ChatEvent]) -> StreamingResponse:
+    async def frames() -> AsyncIterator[str]:
+        async for event in events:
+            yield format_sse(event)
+
+    return StreamingResponse(
+        frames(), media_type="text/event-stream", headers=SSE_HEADERS
+    )
 
 
 @router.post(
@@ -101,36 +143,22 @@ async def chat(
     its total deadline ends the stream with an `error` event. The answer is plain
     text: links in it are reported in `done.external_links`, never fetched (ADR-0007).
     """
-    mode = settings.retrieval_mode
-    with retrieval_errors():
-        result = await retrieve(
-            store=store,
-            reranker=reranker,
-            fetch_chunks=chunk_repository.fetch_chunks,
-            fetch_neighbors=chunk_repository.fetch_neighbors,
-            tenant_id=tenant_id,
-            query=request.question,
-            document_ids=request.document_ids,
-            limit=request.limit,
-            candidates=settings.candidates,
-            use_dense=mode in ("dense", "hybrid"),
-            use_sparse=mode in ("sparse", "hybrid"),
-            use_rerank=settings.rerank,
-            expand=settings.expand,
-        )
-
-    async def frames() -> AsyncIterator[str]:
-        async for event in answer_events(
-            request.question,
-            result.items,
-            llm,
-            max_context_tokens=settings.max_context_tokens,
-            answer_max_tokens=settings.answer_max_tokens,
-            deadline_seconds=settings.llm_answer_deadline_seconds,
-            slots=slots,
-        ):
-            yield format_sse(event)
-
-    return StreamingResponse(
-        frames(), media_type="text/event-stream", headers=SSE_HEADERS
+    items = await retrieve_for_answer(
+        store,
+        reranker,
+        settings,
+        tenant_id=tenant_id,
+        query=request.question,
+        document_ids=request.document_ids,
+        limit=request.limit,
     )
+    events = answer_events(
+        request.question,
+        items,
+        llm,
+        max_context_tokens=settings.max_context_tokens,
+        answer_max_tokens=settings.answer_max_tokens,
+        deadline_seconds=settings.llm_answer_deadline_seconds,
+        slots=slots,
+    )
+    return sse_response(events)
