@@ -117,10 +117,11 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
   out-of-range numbers stripped and counted). Snapshot test of the rendered prompt; poisoned
   source rendered verbatim inside its tag. Four attack documents, checked to fail when the
   neutraliser or the citation range check is disabled.
-- [ ] 5.4 `POST /v1/chat` (SSE): events `sources` -> `token`* -> `citations` -> `done`, and `error`.
-  JSON `data:`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`, stops on disconnect.
-  Empty retrieval refuses with zero LLM calls. Tests use FakeLLM: event order, a newline inside a
-  token, the refusal path, invalid citation stripped, tenant isolation in `sources`, 401, 422.
+- [x] 5.4 `POST /v1/chat` (SSE), ADR-0008 (`129b27a`, `eb5213c`, `6e0ecaf`, `1f2b4e6`):
+  sources -> token* -> citations -> done (or error); JSON `data:`, `no-cache`,
+  `X-Accel-Buffering: no`; disconnect closes the LLM stream; empty retrieval refuses with zero
+  LLM calls. Tests: event order, newline in a token, refusal, invalid citation stripped,
+  tenant isolation in `sources`, 401, 422 (incl. `tenant_id`), 503 without an LLM.
 - [ ] 5.5 Manual run against Ollama: answerable, unanswerable and poisoned documents. Report
   observations as written.
 - [ ] security-reviewer subagent on the M5 diff; fix medium+ findings with tests.
