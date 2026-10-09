@@ -11,7 +11,7 @@ from fastapi import (
     status,
 )
 
-from app.api.deps import CurrentUser, get_current_user
+from app.api.deps import CurrentUser, get_current_user, get_tenant_id
 from app.api.pagination import AFTER, index_key, page, time_cursor_key, time_key
 from app.api.rate_limit import limit_default
 from app.core.config import get_settings
@@ -80,6 +80,7 @@ def _to_response(document: DocumentRecord) -> DocumentResponse:
 async def upload_document(
     response: Response,
     file: UploadFile = File(...),  # noqa: B008 - FastAPI DI pattern
+    tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> DocumentResponse:
@@ -91,7 +92,7 @@ async def upload_document(
     """
     try:
         result = await service.upload(
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
             uploaded_by=current_user.id,
             filename=file.filename,
             source=file,
@@ -128,14 +129,12 @@ async def upload_document(
 )
 async def get_document(
     document_id: UUID,
-    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> DocumentResponse:
     """Return a document in the caller's tenant. Other tenants' ids get 404, not 403."""
     try:
-        document = await service.get(
-            tenant_id=current_user.tenant_id, document_id=document_id
-        )
+        document = await service.get(tenant_id=tenant_id, document_id=document_id)
     except DocumentNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
@@ -150,13 +149,13 @@ _LIMIT = Query(default=20, ge=1, le=100)
 async def list_documents(
     limit: int = _LIMIT,
     after: str | None = AFTER,
-    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> DocumentPage:
     """Newest first, one cursor page at a time. Only documents in the caller's tenant."""
-    scope = f"documents:{current_user.tenant_id}"
+    scope = f"documents:{tenant_id}"
     rows, total = await service.list_documents(
-        tenant_id=current_user.tenant_id, limit=limit + 1, after=time_key(after, scope)
+        tenant_id=tenant_id, limit=limit + 1, after=time_key(after, scope)
     )
     records, next_cursor = page(
         rows, limit, scope, lambda r: time_cursor_key(r.created_at, r.id)
@@ -178,15 +177,15 @@ async def list_chunks(
     document_id: UUID,
     limit: int = _LIMIT,
     after: str | None = AFTER,
-    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> ChunkPage:
     """Chunks in chunk_index order, one cursor page at a time. 404 if the document is not
     in the caller's tenant."""
-    scope = f"chunks:{current_user.tenant_id}:{document_id}"
+    scope = f"chunks:{tenant_id}:{document_id}"
     try:
         rows, total = await service.list_chunks(
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
             document_id=document_id,
             limit=limit + 1,
             after=index_key(after, scope),
@@ -221,12 +220,12 @@ async def list_chunks(
 )
 async def delete_document(
     document_id: UUID,
-    current_user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
+    tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
     service: DocumentService = Depends(get_document_service),  # noqa: B008 - FastAPI DI pattern
 ) -> Response:
     """Removes the row (chunks cascade) and then the stored file. 404 for other tenants."""
     try:
-        await service.delete(tenant_id=current_user.tenant_id, document_id=document_id)
+        await service.delete(tenant_id=tenant_id, document_id=document_id)
     except DocumentNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
