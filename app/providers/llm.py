@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -59,7 +59,7 @@ class LLMProvider(Protocol):
         messages: Sequence[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.0,
-    ) -> AsyncIterator[str]: ...
+    ) -> AsyncGenerator[str, None]: ...
 
     async def complete(
         self,
@@ -83,7 +83,7 @@ class FakeLLM:
         messages: Sequence[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.0,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str, None]:
         self.calls.append(list(messages))
         for token in self._tokens:
             yield token

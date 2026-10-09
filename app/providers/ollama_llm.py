@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 
 import httpx
 
@@ -39,7 +39,7 @@ class OllamaProvider:
         messages: Sequence[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.0,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str, None]:
         body = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],

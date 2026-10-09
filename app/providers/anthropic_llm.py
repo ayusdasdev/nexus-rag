@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from typing import Any
 
 import httpx
@@ -97,7 +97,7 @@ class AnthropicProvider:
         messages: Sequence[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.0,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str, None]:
         body: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max(max_tokens, self._min_max_tokens),
