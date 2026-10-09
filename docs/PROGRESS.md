@@ -98,14 +98,14 @@ Legend: `[x]` done and verified · `[ ]` to do · `[?]` needs your decision · `
 
 - [x] 5.1 ADR-0007 prompt-injection defence, from your four layers (`35cd4ba`). The SSE schema
   goes in the 5.4 ADR.
-- [ ] 5.2 `app/providers/llm.py`: `LLMProvider` Protocol (`stream`, `complete`, `name`). It has:
-  - `FakeLLM` (scripted tokens) for tests.
-  - `OllamaProvider` over HTTP (`OLLAMA_URL`, `OLLAMA_MODEL`) using httpx, not an extra SDK.
-  - `AnthropicProvider` (anthropic SDK). It's built only when `LLM_PROVIDER=anthropic` and
-    `ANTHROPIC_API_KEY` is set; otherwise it's a startup error, never a silent call. Its tests
-    are skipped without the key.
-  - `get_llm()` factory.
-  New deps: `anthropic`, and `httpx` moves to runtime. Both explained in chat first.
+- [x] 5.2 LLM providers (`6061bfa`, `efcb960`, `a58e7bf`, `bcd3b17`):
+  - `LLMProvider` Protocol (`stream`, `complete`, `name`) and `FakeLLM`; typed errors.
+  - `OllamaProvider` (httpx, NDJSON) and `AnthropicProvider` (httpx, SSE, no SDK), sharing
+    one retry on 429/5xx (`llm_http.open_stream`).
+  - Anthropic: `claude-opus-5-5`, refusal fallback `"default"` on, no temperature (rejected by
+    the model), `max_tokens` raised to 16000 because thinking counts toward it.
+  - `LLM_PROVIDER=anthropic` without a key fails at startup; `build_llm` refuses too.
+  - httpx moved dev -> runtime, logged in `dependencies.md`. All tests use `MockTransport`.
 - [?] Ollama `llama3.2:3b` inside WSL: approved, but **sudo needs a password**, so you run
   the zstd and install commands with `!`. Nothing is installed yet. Install is about 1.44 GB
   plus `zstd`; the model is about 2.02 GB.
