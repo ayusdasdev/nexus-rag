@@ -1540,6 +1540,7 @@ dependencies = [
     { name = "celery" },
     { name = "fastapi" },
     { name = "fastembed" },
+    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -1555,7 +1556,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "import-linter" },
     { name = "mypy" },
     { name = "pytest" },
@@ -1571,6 +1571,7 @@ requires-dist = [
     { name = "celery", specifier = "==5.6.3" },
     { name = "fastapi", specifier = "==0.142.1" },
     { name = "fastembed", specifier = "==0.8.1" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.6" },
     { name = "pydantic-settings", specifier = "==2.15.0" },
     { name = "pyjwt", specifier = "==2.15.1" },
@@ -1586,7 +1587,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = "==0.28.1" },
     { name = "import-linter", specifier = "==2.15" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "pytest", specifier = "==9.1.1" },

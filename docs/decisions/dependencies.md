@@ -39,3 +39,4 @@ ones pinned in `pyproject.toml`, which was restored on 2026-10-08 (it had never 
 | 2026-10-01 | ruff 0.16.9 (dev) | Lint and format (`make lint`, the PostToolUse hook). | 3ef23e7 |
 | 2026-10-01 | mypy 2.3.1 (dev) | `mypy --strict` type checking (mypy.ini). | 3ef23e7 |
 | 2026-10-08 | hatchling (build) | Build backend for the editable install of `app/`, the same backend the existing venv was built with. Build-time only. | - |
+| 2026-10-09 | httpx 0.28.1 (dev -> runtime) | `OllamaProvider` and `AnthropicProvider` call their HTTP APIs with it (streaming NDJSON and SSE). Chosen over the `ollama` and `anthropic` SDKs: one HTTP client we already lock and test with, and the anthropic SDK has required `httpx2` since 1.6.0 (decision B, 2026-10-09). No new packages; `uv lock` only moved it between groups. | - |
