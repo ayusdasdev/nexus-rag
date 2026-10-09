@@ -5,9 +5,11 @@ retrieval query: by a rule (default, no LLM call) or by the LLM (guide 6.2), nev
 first turn.
 """
 
+import asyncio
 import logging
 import re
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
 
 from app.core.config import RewriteMode
 from app.providers.llm import ChatMessage, LLMError, LLMProvider
@@ -96,14 +98,32 @@ def _render(history: Sequence[HistoryTurn], question: str) -> list[ChatMessage]:
 
 
 async def _llm_rewrite(
-    history: Sequence[HistoryTurn], question: str, llm: LLMProvider
+    history: Sequence[HistoryTurn],
+    question: str,
+    llm: LLMProvider,
+    slots: asyncio.Semaphore | None,
+    timeout_seconds: float | None,
 ) -> str:
+    # The rewrite is an LLM call like an answer: it takes an answer slot and has a
+    # deadline. Busy or slow means retrieving with the question as is (M6 review).
+    if slots is not None and slots.locked():
+        logger.warning("query rewrite skipped: every answer slot is taken")
+        return question
     try:
-        output = await llm.complete(
-            _render(history, question), max_tokens=REWRITE_MAX_TOKENS, temperature=0.0
-        )
+        async with slots if slots is not None else nullcontext():
+            async with asyncio.timeout(timeout_seconds):
+                output = await llm.complete(
+                    _render(history, question),
+                    max_tokens=REWRITE_MAX_TOKENS,
+                    temperature=0.0,
+                )
+    except TimeoutError:
+        logger.warning("query rewrite passed its %ss deadline", timeout_seconds)
+        return question
     except LLMError as exc:
-        logger.warning("query rewrite failed, using the question as is: %s", exc)
+        logger.warning(
+            "query rewrite failed (%s); using the question", type(exc).__name__
+        )
         return question
     rewritten = _clean(output)
     # A standalone query borrows its subject from the previous question, so the limit is
@@ -121,10 +141,12 @@ async def rewrite_query(
     *,
     mode: RewriteMode,
     llm: LLMProvider,
+    slots: asyncio.Semaphore | None = None,
+    timeout_seconds: float | None = None,
 ) -> str:
     """The query to retrieve with. The question itself on the first turn or when mode is off."""
     if not history or mode == "off":
         return question
     if mode == "rule":
         return _rule_rewrite(history, question)
-    return await _llm_rewrite(history, question, llm)
+    return await _llm_rewrite(history, question, llm, slots, timeout_seconds)

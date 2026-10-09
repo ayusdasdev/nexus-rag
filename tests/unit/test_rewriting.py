@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.providers.llm import FakeLLM, LLMUnavailable
@@ -227,3 +229,55 @@ async def test_llm_mode_keeps_history_inside_its_delimiters() -> None:
     assert user.count("<history>") == 1
     assert user.count("</history>") == 1
     assert user.count("<question>") == 1
+
+
+# --- M6 review, MEDIUM-2: the LLM rewrite obeys the answer slots and a deadline -----
+
+
+@pytest.mark.asyncio
+async def test_llm_rewrite_holds_an_answer_slot_while_it_runs() -> None:
+    slots = asyncio.Semaphore(1)
+    seen: list[bool] = []
+
+    class Watching(FakeLLM):
+        async def complete(self, messages, max_tokens=512, temperature=0.0):  # type: ignore[no-untyped-def]
+            seen.append(slots.locked())
+            return "What is the refund policy for monthly plans?"
+
+    query = await rewrite_query(
+        HISTORY, "And for monthly plans?", mode="llm", llm=Watching([]), slots=slots
+    )
+
+    assert query == "What is the refund policy for monthly plans?"
+    assert seen == [True]
+    assert not slots.locked()
+
+
+@pytest.mark.asyncio
+async def test_llm_rewrite_with_every_slot_taken_skips_the_llm_and_keeps_the_question() -> (
+    None
+):
+    slots = asyncio.Semaphore(1)
+    await slots.acquire()
+    llm = FakeLLM(["never used"])
+
+    query = await rewrite_query(
+        HISTORY, "And for monthly plans?", mode="llm", llm=llm, slots=slots
+    )
+
+    assert query == "And for monthly plans?"
+    assert llm.calls == []
+
+
+@pytest.mark.asyncio
+async def test_llm_rewrite_past_its_deadline_keeps_the_question() -> None:
+    class Slow(FakeLLM):
+        async def complete(self, messages, max_tokens=512, temperature=0.0):  # type: ignore[no-untyped-def]
+            await asyncio.sleep(60)
+            return "never"
+
+    query = await rewrite_query(
+        HISTORY, "And for monthly plans?", mode="llm", llm=Slow([]), timeout_seconds=0.1
+    )
+
+    assert query == "And for monthly plans?"

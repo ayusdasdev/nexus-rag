@@ -169,7 +169,12 @@ async def post_message(
     )
 
     query = await rewrite_query(
-        history, request.question, mode=settings.rewrite_mode, llm=llm
+        history,
+        request.question,
+        mode=settings.rewrite_mode,
+        llm=llm,
+        slots=slots,
+        timeout_seconds=settings.llm_answer_deadline_seconds,
     )
     items = await retrieve_for_answer(
         store,
