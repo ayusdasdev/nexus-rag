@@ -17,6 +17,8 @@ Qdrant calls outside repositories/ (enforced by `.importlinter`, run via `make l
 tenant filter.
 - Embeddings, reranker and LLM sit behind Protocols in app/providers/. Tests use Fake* versions.
 Provider SDK imports outside app/providers/ are blocked by `.importlinter`.
+- Prompts live in app/prompts/*.md and are loaded at runtime via app/services/prompts.load_prompt;
+never inline a prompt in code. Retrieved text goes only inside <document> tags (ADR-0007).
 - Chunk/point IDs are deterministic: uuid5(NAMESPACE, f"{document_id}:{chunk_index}").
 ## Conventions
 - Type hints everywhere; `mypy --strict` (see mypy.ini) must pass. Pydantic v2 for every
