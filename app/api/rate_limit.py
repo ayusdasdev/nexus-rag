@@ -54,6 +54,7 @@ def _too_many(retry: float, limit: float) -> HTTPException:
 
 def rate_limited(kind: LimitClass) -> Callable[..., Awaitable[None]]:
     async def check(
+        request: Request,
         user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
         settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
         store: RedisRateLimitStore = Depends(get_rate_limit_store),  # noqa: B008
@@ -74,6 +75,10 @@ def rate_limited(kind: LimitClass) -> Callable[..., Awaitable[None]]:
             return
         if not decision.allowed:
             raise _too_many(decision.retry_after, tenant_bucket.capacity)
+        # Remembered so a 422 can be refunded (ADR-0010); 401/403 keep the charge.
+        charges = getattr(request.state, "rate_limit_charges", [])
+        charges.append((store, keys, [tenant_bucket, user_bucket]))
+        request.state.rate_limit_charges = charges
 
     check.__name__ = f"rate_limited_{kind}"
     return check
@@ -139,3 +144,15 @@ async def enforce_auth_limit(
         ) from exc
     if not decision.allowed:
         raise _too_many(decision.retry_after, min(b.capacity for b in buckets))
+
+
+async def refund_rate_limit(request: Request) -> None:
+    """Return the tokens this request was charged. Best effort: a refund that can't reach
+    Redis is logged and dropped, never turned into a different error."""
+    charges = getattr(request.state, "rate_limit_charges", [])
+    request.state.rate_limit_charges = []
+    for store, keys, buckets in charges:
+        try:
+            await store.refund(keys, buckets)
+        except RateLimiterUnavailable as exc:
+            logger.warning("rate-limit refund failed (%s)", exc)

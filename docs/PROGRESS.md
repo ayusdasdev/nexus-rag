@@ -249,8 +249,7 @@ dependency).
     timeouts -> 0.5 s, malformed replies handled (`a840235`); CLI config chmod/symlink
     (reproduced), terminal escapes, login target, redirects/tracebacks (`ec9f507`).
   - LOW fixed: SQL parameters in error text/logs -> hide_parameters (`bccf679`).
-  - [?] Open decision (ADR-0010): a 422 spends a rate-limit token (measured). Keep, or check
-    limits only after validation?
+  - [x] Your decision: a 422 is refunded, 401/403 are not (ADR-0010, see the M8 section).
   - Accepted, in ADR-0010 (`0097493`): half-share user buckets can drain a tenant; cursor key
     tied to the JWT secret; logout doesn't revoke; public `/docs`.
 

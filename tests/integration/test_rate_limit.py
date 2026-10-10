@@ -284,3 +284,56 @@ def test_upload_defaults_are_10_burst_then_1_per_minute() -> None:
 
     assert settings.rate_limit_upload_capacity == 10
     assert settings.rate_limit_upload_refill_per_second == pytest.approx(1 / 60)
+
+
+# --- ADR-0010 decision: 422s are refunded, 401/403 are not --------------------------
+
+
+async def test_invalid_chat_bodies_are_refunded(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM, real_store: None
+) -> None:
+    caller = await new_tenant()
+    for _ in range(4):
+        bad = await client.post(
+            "/v1/chat", headers=caller.headers, json={"question": ""}
+        )
+        assert bad.status_code == 422
+
+    assert [(await _chat(client, caller)).status_code for _ in range(2)] == [200, 200]
+
+
+async def test_an_invalid_cursor_is_refunded(
+    client: AsyncClient, new_tenant: NewTenant, real_store: None
+) -> None:
+    caller = await new_tenant()
+    _settings(rate_limit_default_capacity=2, rate_limit_default_refill_per_second=0.001)
+    try:
+        for _ in range(3):
+            bad = await client.get(
+                "/v1/documents", headers=caller.headers, params={"after": "forged"}
+            )
+            assert bad.status_code == 422
+        good = await client.get("/v1/documents", headers=caller.headers)
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert good.status_code == 200
+
+
+async def test_a_403_still_spends_its_token(
+    client: AsyncClient, new_tenant: NewTenant, new_member: NewMember, real_store: None
+) -> None:
+    member = await new_member(await new_tenant())
+    _settings(rate_limit_search_capacity=2, rate_limit_search_refill_per_second=0.001)
+    try:
+        forbidden = await client.post(
+            "/v1/search", headers=member.headers, json={"query": "x", "debug": True}
+        )
+        after = await client.post(
+            "/v1/search", headers=member.headers, json={"query": "x"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert forbidden.status_code == 403
+    assert after.status_code == 429  # the user's single search token went to the 403

@@ -58,6 +58,21 @@ return {allowed, tostring(remaining), tostring(wait)}
 """
 
 
+# KEYS: bucket keys. ARGV: cost, then each key's capacity. Adds the cost back, capped at
+# capacity; a key that no longer exists is left alone.
+_REFUND = """
+local cost = tonumber(ARGV[1])
+for i = 1, #KEYS do
+  local tokens = redis.call('HGET', KEYS[i], 't')
+  if tokens then
+    local capacity = tonumber(ARGV[i + 1])
+    redis.call('HSET', KEYS[i], 't', tostring(math.min(capacity, tonumber(tokens) + cost)))
+  end
+end
+return 1
+"""
+
+
 class RateLimiterUnavailable(Exception):
     """Redis couldn't be reached; the caller decides whether to fail open or closed."""
 
@@ -66,6 +81,7 @@ class RedisRateLimitStore:
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
         self._script = redis.register_script(_TAKE)
+        self._refund = redis.register_script(_REFUND)
 
     async def take(
         self, keys: Sequence[str], buckets: Sequence[Bucket], cost: float = 1.0
@@ -89,3 +105,13 @@ class RedisRateLimitStore:
                 f"malformed reply ({type(exc).__name__})"
             ) from exc
         return decision
+
+    async def refund(
+        self, keys: Sequence[str], buckets: Sequence[Bucket], cost: float = 1.0
+    ) -> None:
+        """Give back what take() charged (ADR-0010: a 422 costs nothing)."""
+        args: list[Any] = [cost, *(bucket.capacity for bucket in buckets)]
+        try:
+            await self._refund(keys=list(keys), args=args)
+        except (RedisError, OSError, TimeoutError) as exc:
+            raise RateLimiterUnavailable(type(exc).__name__) from exc

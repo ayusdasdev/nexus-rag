@@ -72,10 +72,12 @@ and unbounded credential fields.
   product flow. The global signup budget bounds it instead.
 
 ## Consequences and open points
-- **Open decision: a 422 currently spends a rate-limit token.** This was measured: two invalid
-  `/v1/chat` bodies used up a user's chat burst, and a valid request then got 429. Charging
-  junk requests deters abuse. Not charging them means checking the limit after validation, so
-  junk becomes free. Left as is until you decide.
+- **Decided (2026-10-10): a 422 is refunded.** Before this, two invalid `/v1/chat` bodies
+  used up a user's chat burst (measured). Now the limiter records what it charged, and both
+  422 paths give it back: FastAPI validation errors and our own 422s, such as an invalid
+  cursor. The refund script adds the tokens back, capped at capacity. A 403 keeps its charge,
+  and a 401 is never charged because auth runs before the limiter. A refund that can't reach
+  Redis is logged and dropped.
 - **Accepted:** within a tenant, two users can drain the tenant's chat bucket for everyone in
   it, because the user share is half (your M7 choice).
 - **Accepted:** the cursor key is derived from the JWT secret, so rotating that secret

@@ -147,3 +147,42 @@ async def test_a_malformed_script_reply_is_unavailable_not_a_500(
 
     with pytest.raises(RateLimiterUnavailable):
         await store.take(_keys(), [Bucket(1, 0.0)])
+
+
+# --- refunds (ADR-0010 decision: a 422 gives its token back) ------------------------
+
+
+async def test_a_refund_returns_the_tokens_to_every_bucket(redis: Redis) -> None:
+    store = RedisRateLimitStore(redis)
+    keys = _keys(2)
+    buckets = [
+        Bucket(capacity=2, refill_per_second=0.0),
+        Bucket(capacity=1, refill_per_second=0.0),
+    ]
+
+    assert (await store.take(keys, buckets)).allowed
+    assert not (await store.take(keys, buckets)).allowed
+    await store.refund(keys, buckets)
+
+    assert (await store.take(keys, buckets)).allowed
+
+
+async def test_a_refund_never_raises_a_bucket_above_capacity(redis: Redis) -> None:
+    store = RedisRateLimitStore(redis)
+    keys, buckets = _keys(), [Bucket(capacity=2, refill_per_second=0.0)]
+    await store.take(keys, buckets)
+
+    for _ in range(5):
+        await store.refund(keys, buckets)
+
+    assert float(await redis.hget(keys[0], "t") or 0) == pytest.approx(2.0)
+
+
+async def test_refunding_an_unknown_key_creates_nothing(redis: Redis) -> None:
+    keys = _keys()
+
+    await RedisRateLimitStore(redis).refund(
+        keys, [Bucket(capacity=2, refill_per_second=0.0)]
+    )
+
+    assert await redis.exists(keys[0]) == 0

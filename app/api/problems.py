@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.rate_limit import refund_rate_limit
 from app.core.request_context import current_request_id
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ def problem_response(
 
 async def _http_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
+    if exc.status_code == 422:
+        await refund_rate_limit(request)  # e.g. an invalid cursor (ADR-0010)
     detail = (
         exc.detail
         if isinstance(exc.detail, str)
@@ -51,6 +54,7 @@ async def _http_error(request: Request, exc: Exception) -> JSONResponse:
 
 async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
+    await refund_rate_limit(request)  # an invalid request costs no tokens (ADR-0010)
     # The submitted values ("input") are left out: they can be document text or secrets.
     errors = [
         {
