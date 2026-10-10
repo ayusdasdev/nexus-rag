@@ -148,3 +148,19 @@ def test_result_lines_carry_the_deterministic_checks(tmp_path: Path) -> None:
 def test_generate_on_the_holdout_is_refused_before_anything_loads() -> None:
     with pytest.raises(SystemExit, match="final-holdout"):
         runner.main(["--tag", "x", "--split", "holdout", "--generate"])
+
+
+def test_the_real_wiring_builds_an_answerer_only_when_generating() -> None:
+    from eval.pipeline import answer_fn_for
+
+    built: list[Settings] = []
+
+    def build(settings: Settings) -> FakeLLM:
+        built.append(settings)
+        return FakeLLM(["x"])
+
+    assert answer_fn_for(False, SETTINGS, build) is None and built == []
+    assert answer_fn_for(True, SETTINGS, build) is not None and built == [SETTINGS]
+    with pytest.raises(SystemExit, match="ollama"):
+        answer_fn_for(True, Settings.model_construct(llm_provider="anthropic"), build)
+    assert len(built) == 1  # refused before any provider was built

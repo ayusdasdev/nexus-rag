@@ -122,14 +122,26 @@ def build_search(
     return search
 
 
+def answer_fn_for(
+    generate: bool, settings: Settings, build: Callable[[Settings], LLMProvider]
+) -> AnswerFn | None:
+    """None for a retrieval-only run. Otherwise the answerer, after the Ollama-only check,
+    so a non-Ollama provider is never built."""
+    if not generate:
+        return None
+    if settings.llm_provider != "ollama":
+        raise SystemExit(
+            f"eval generation runs on ollama only; LLM_PROVIDER is {settings.llm_provider!r}"
+        )
+    return make_answerer(build(settings), settings)
+
+
 def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]]:
     """The real search for the eval tenant. Models load on first use, not at import."""
-    if generate:
-        raise SystemExit(
-            "generation runs are not wired yet (they come with eval/judge.py)"
-        )
     from functools import partial
 
+    from app.core.config import get_settings
+    from app.providers.llm_factory import build_llm
     from app.providers.reranker import get_reranker
     from app.repositories import chunk_repository
     from app.repositories.session import dispose_engine
@@ -137,6 +149,7 @@ def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]
     from app.services.retrieval import retrieve
     from eval.rerank_cache import CachingReranker
 
+    answer_fn = answer_fn_for(generate, get_settings(), build_llm)
     state = json.loads(STATE.read_text())
     doc_names = {UUID(d["id"]): d["file"] for d in state["documents"]}
     retrieve_fn = partial(
@@ -146,6 +159,5 @@ def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]
         fetch_chunks=chunk_repository.fetch_chunks,
         fetch_neighbors=chunk_repository.fetch_neighbors,
     )
-    return build_search(
-        retrieve_fn, UUID(state["tenant_id"]), doc_names
-    ), dispose_engine
+    search = build_search(retrieve_fn, UUID(state["tenant_id"]), doc_names, answer_fn)
+    return search, dispose_engine
