@@ -198,7 +198,7 @@ first; conversations are owner-only (admins get 404 too).
 - [x] M6 close checks (run one at a time, Ollama stopped): `make lint` pass, `make test`
   **365 passed**, `make test-int` **218 passed**, no 401, nothing flaky.
 
-## M7: API polish and CLI
+## M7: API polish and CLI (closed 2026-10-10)
 
 Your decisions (2026-10-09): ADR-0009 accepted as written (3x rewrite rule), caps stay at
 1000. Rate limiter in **Redis**, token buckets **per tenant and per user** (user = half the
@@ -253,6 +253,10 @@ dependency).
     limits only after validation?
   - Accepted, in ADR-0010 (`0097493`): half-share user buckets can drain a tenant; cursor key
     tied to the JWT secret; logout doesn't revoke; public `/docs`.
+
+- [x] M7 close checks (run one at a time, Ollama stopped): `make lint` pass, `make test`
+  **479 passed**, `make test-int` **285 passed**, no 401, nothing flaky. Two new cosmetic
+  warnings: sync tests in asyncio-marked modules, as in `test_isolation.py`.
 
 ## M8: Evaluation and tuning
 
