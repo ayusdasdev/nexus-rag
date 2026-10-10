@@ -268,13 +268,16 @@ calibrated on 15 answers you grade; judge numbers reported as rough. Metrics: Re
 MRR, nDCG@10; generation runs only for E3 and the best config (and the final held-out run).
 Free setup only; ask before any run over 30 minutes.
 
-- [?] 8.1 Corpus choice (15-25 docs) and an eval tenant. You choose.
-- [?] 8.2 `eval/tools/gen_candidates.py` and `eval/tools/review.py`. I draft candidates; **you review
-  and approve every question** (keep/edit/reject), rewrite about a third, and add exact-token,
-  multi-chunk and 8+ unanswerable questions. Test: every gold span occurs in its document.
-  Hold out ~20%.
-- [ ] 8.3 `eval/metrics.py`: is_hit, recall@k, precision@k, MRR (0.444 example), nDCG@k, with
-  hand-computed tests.
+- [x] 8.1 Corpus (your choice) frozen in `eval/corpus/` (22 files, manifest + hash test,
+  `0509306`); eval tenant ingested through the API: 22/22 ready in 350 s, 473 chunks.
+  Parse findings: guide.pdf code-box text became headings (wrong `heading_path` on many
+  chunks), and the guide's example ADR block survives only as a heading (bucket A parse loss);
+  generation-observations.md repeats sample-doc text verbatim, so spans can hit in two docs.
+- [~] 8.2 60 candidates drafted in-session (21 factoid, 12 paraphrase, 9 exact-token, 9
+  multi-chunk, 9 unanswerable) in `eval/datasets/candidates.jsonl`; every span verified inside
+  one real chunk. `eval/tools/review.py` (keep/edit/reject, resumable). **Waiting for your
+  review**, batch 1 of 3 (q001-q020). Then: span test on v1, 20% hold-out.
+- [x] 8.3 `eval/metrics.py` with hand-computed tests (`aed8ce0`).
 - [ ] 8.4 `eval/judge.py` and `eval/prompts/`: claim-level faithfulness, 0-1-2 correctness, refusal
   detection. Calibration tool where **you** hand-grade 15 answers. A local judge is reported as rough.
 - [ ] 8.5 Migration 3 (`eval_runs`, `eval_results`), `eval/runner.py` with `--set` overrides,
