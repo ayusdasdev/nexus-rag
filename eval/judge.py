@@ -218,7 +218,7 @@ def parse_verdict(text: str) -> dict[str, Any]:
 
 def judge_messages(rec: AnswerRecord) -> list[ChatMessage]:
     sources = "\n\n".join(
-        f"<source id='{n}'>\n{_escape(text)}\n</source>"
+        f"<document id='{n}'>\n{_escape(text)}\n</document>"
         for n, text in enumerate(rec.sources, 1)
     )
     values = {
