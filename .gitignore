@@ -36,3 +36,6 @@ htmlcov/
 
 # Uploaded document bytes
 data/
+
+# M8: local eval state (tenant ids for this database) and raw run output
+eval/state/

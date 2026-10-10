@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Calibrating widgets - Nexus Docs</title>
+</head>
+<body>
+  <div class="cookie-banner" role="dialog">
+    <p>We use cookies to improve the docs. ACCEPT-ALL-COOKIES</p>
+  </div>
+  <nav class="top-nav">
+    <ul>
+      <li class="nav-item"><a href="/">NAV-MENU-ITEM Home</a></li>
+      <li class="nav-item"><a href="/guides">NAV-MENU-ITEM Guides</a></li>
+      <li class="nav-item"><a href="/api">NAV-MENU-ITEM API</a></li>
+      <li class="nav-item"><a href="/changelog">NAV-MENU-ITEM Changelog</a></li>
+    </ul>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <h4>In this guide</h4>
+      <ul>
+        <li><a href="#offsets">Offsets</a></li>
+        <li><a href="#humidity">Humidity</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+      </ul>
+    </aside>
+    <main>
+      <article>
+        <h1>Calibrating widgets</h1>
+        <p>Calibration corrects small offsets that come from manufacturing tolerances and from the
+        mounting position. A widget that is calibrated once keeps its offset across restarts.</p>
+        <h2 id="offsets">Temperature offsets</h2>
+        <p>Place a reference thermometer beside the widget and wait fifteen minutes. Then enter the
+        reference reading on the device page.</p>
+        <h3>Using the calibration command</h3>
+        <p>The same step can be run from the command line:</p>
+        <pre><code>nexus-cli devices calibrate --device WID-0042 --reference 21.5
+
+nexus-cli devices show --device WID-0042</code></pre>
+        <h2 id="humidity">Humidity offsets</h2>
+        <p>Humidity calibration uses a saturated salt solution. The steps are:</p>
+        <ul>
+          <li>Seal the widget and the reference in a container for one hour.</li>
+          <li>Record the reference humidity from the label on the solution.</li>
+          <li>Enter the value on the device page.</li>
+        </ul>
+        <h2 id="troubleshooting">Troubleshooting</h2>
+        <h3>Offset looks wrong after moving a widget</h3>
+        <p>Calibrate again after any change of mounting position. Offsets do not follow a widget
+        between sites.</p>
+      </article>
+    </main>
+  </div>
+  <footer>
+    <p>Nexus Widgets documentation. FOOTER-LINKS <a href="/privacy">Privacy</a> <a href="/terms">Terms</a> <a href="/status">Status</a></p>
+  </footer>
+</body>
+</html>

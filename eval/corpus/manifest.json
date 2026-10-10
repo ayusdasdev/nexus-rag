@@ -1,0 +1,138 @@
+{
+  "frozen_at_commit": "bed7e0b",
+  "note": "Copies frozen for M8; never edit in place. Change the corpus = new manifest + new dataset version.",
+  "files": [
+    {
+      "file": "0001-pdf-parser-agpl-licence.md",
+      "source": "docs/decisions/0001-pdf-parser-agpl-licence.md",
+      "sha256": "73db8ea55c3e00a4bb570d7b4ef8e8e07ab7c2674b8c52a079e17eaf05b63a21",
+      "bytes": 1139
+    },
+    {
+      "file": "0002-embedding-stage.md",
+      "source": "docs/decisions/0002-embedding-stage.md",
+      "sha256": "a06868c3abd317fe1e7bc07e8cf9d44a3cb7e2a23dc64303a09b2d41b9cb016a",
+      "bytes": 3124
+    },
+    {
+      "file": "0003-retrieval-switches-and-fusion.md",
+      "source": "docs/decisions/0003-retrieval-switches-and-fusion.md",
+      "sha256": "ff3c9de576c2ddddcedb8d1e2efafd08df729695ccd4a3065d01e88e01dc8b05",
+      "bytes": 2916
+    },
+    {
+      "file": "0004-search-returns-only-ready-documents.md",
+      "source": "docs/decisions/0004-search-returns-only-ready-documents.md",
+      "sha256": "e4b73c03ee6fbd9e5adf70098ae5f7eac43b06622033952174c507d8a1f0e0e5",
+      "bytes": 2288
+    },
+    {
+      "file": "0005-search-debug-is-admin-only.md",
+      "source": "docs/decisions/0005-search-debug-is-admin-only.md",
+      "sha256": "a2f4f9ef5370993baee100629770bf82593d15be29b7633d7f2669a3f15e9db8",
+      "bytes": 1469
+    },
+    {
+      "file": "0006-jwt-clock-skew-leeway.md",
+      "source": "docs/decisions/0006-jwt-clock-skew-leeway.md",
+      "sha256": "b7e9325641ce5d60e84c857f2a06c814c271563e51bcb3ef3afca74552fe82ad",
+      "bytes": 1734
+    },
+    {
+      "file": "0007-prompt-injection-defence.md",
+      "source": "docs/decisions/0007-prompt-injection-defence.md",
+      "sha256": "b4a8ad34395a3124159b66be018c74af6cdd1e5e048606390ffd245276805e46",
+      "bytes": 3829
+    },
+    {
+      "file": "0008-chat-sse-event-schema.md",
+      "source": "docs/decisions/0008-chat-sse-event-schema.md",
+      "sha256": "9a5c235d410f4175c1c66361dc201b9a2ba7e5afd06acb29c3141f1a9c4420a1",
+      "bytes": 3472
+    },
+    {
+      "file": "0009-conversation-memory-and-query-rewriting.md",
+      "source": "docs/decisions/0009-conversation-memory-and-query-rewriting.md",
+      "sha256": "d21c53d96f54091fbe158717199aa4a945000bc3a20daf8c5039fe040f6b3277",
+      "bytes": 4640
+    },
+    {
+      "file": "0010-api-conventions-and-rate-limiting.md",
+      "source": "docs/decisions/0010-api-conventions-and-rate-limiting.md",
+      "sha256": "e7940d2d6be14faf14397ec0bfb5829adfa9589fa3a1dd601a5d7f6c12e61c4c",
+      "bytes": 4681
+    },
+    {
+      "file": "01_text_heavy.pdf",
+      "source": "sample_docs/01_text_heavy.pdf",
+      "sha256": "5dc12f923d6f9b712c29f2c2a042c926e5d9d93b1e13054c55ca05fc151b2c44",
+      "bytes": 15658
+    },
+    {
+      "file": "02_table.pdf",
+      "source": "sample_docs/02_table.pdf",
+      "sha256": "1cc2ab22e3d55145f6339cc1b5cd2226c30bbadcba2c9eb508bb9eaa510fc20e",
+      "bytes": 6849
+    },
+    {
+      "file": "03_two_column.pdf",
+      "source": "sample_docs/03_two_column.pdf",
+      "sha256": "498fbf330e9cf49d49a1ede6ed0e8434bf4dbda43f8db87437166a0d183c544e",
+      "bytes": 4970
+    },
+    {
+      "file": "04_docs_page.html",
+      "source": "sample_docs/04_docs_page.html",
+      "sha256": "6e95baf4bb2bf2846694621f3b590e2b678b2b3bcf5fe547d44a1b12bf667889",
+      "bytes": 2408
+    },
+    {
+      "file": "05_README.md",
+      "source": "sample_docs/05_README.md",
+      "sha256": "5a38f6d8b4f6c16e322c11a6d46424bda6bf8da38cf9d4e8c732bcdbc877315c",
+      "bytes": 865
+    },
+    {
+      "file": "CLAUDE.md",
+      "source": "CLAUDE.md",
+      "sha256": "f5fc10035be360e182f338529f99fbf2a1686e34fbbf1dad0b0cfe5a3cc9133b",
+      "bytes": 2372
+    },
+    {
+      "file": "api-audit.md",
+      "source": "docs/api-audit.md",
+      "sha256": "5613e81bd5ae5e49f36d528afd17970cdf3a1be7ac16c5733fa3decb48e139a1",
+      "bytes": 6131
+    },
+    {
+      "file": "cli-demo.md",
+      "source": "docs/cli-demo.md",
+      "sha256": "5784e38a4795e490ad2b17fbe162a3ae3758dcc80fa8b5e34f69f9a1d6373467",
+      "bytes": 3316
+    },
+    {
+      "file": "dependencies.md",
+      "source": "docs/decisions/dependencies.md",
+      "sha256": "ef13fd2d82f8eeef3471c404d29d41d0b7abde0a823b2a3c88da9060270f0d22",
+      "bytes": 5994
+    },
+    {
+      "file": "generation-observations.md",
+      "source": "docs/decisions/generation-observations.md",
+      "sha256": "4065fc6ea29a9808fda0da933a6e02d8cb6083da0c5b97a524e696f35e7c3ace",
+      "bytes": 36550
+    },
+    {
+      "file": "guide.pdf",
+      "source": "docs/guide.pdf",
+      "sha256": "5467d40723c5052ca3afb63e2215783b1061ea341863a358cac3d0f508b4b12b",
+      "bytes": 468418
+    },
+    {
+      "file": "retrieval-observations.md",
+      "source": "docs/decisions/retrieval-observations.md",
+      "sha256": "57b3d8ff3301622362a7ccdaba13b304d8967793ee5d132331c92b037554a01c",
+      "bytes": 13640
+    }
+  ]
+}
