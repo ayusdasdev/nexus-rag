@@ -8,12 +8,16 @@ applies the tenant filter. Reranker scores go through the disk cache.
 """
 
 import json
-from collections.abc import Awaitable, Callable, Mapping
+import time
+from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from app.services.retrieval import RetrieveResult
+from app.core.config import Settings
+from app.providers.llm import LLMProvider
+from app.services.chat import answer_events
+from app.services.retrieval import RetrievedChunk, RetrieveResult
 from eval.runner import Hit, RunConfig, SearchFn, SearchResult
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +25,70 @@ STATE = ROOT / "eval" / "state" / "eval_tenant.json"
 RERANK_CACHE = ROOT / "eval" / "state" / "rerank_cache.sqlite"
 
 RetrieveFn = Callable[..., Awaitable[RetrieveResult]]
+AnswerFn = Callable[
+    [str, Sequence[RetrievedChunk]], Coroutine[Any, Any, dict[str, Any]]
+]
+
+
+def make_answerer(llm: LLMProvider, settings: Settings) -> AnswerFn:
+    """The app's real answer pipeline (answer_events), captured event by event.
+
+    Eval generation is Ollama only: anything else is refused, so a run can't reach a paid
+    provider through a setting in .env."""
+    if settings.llm_provider != "ollama":
+        raise SystemExit(
+            f"eval generation runs on ollama only; LLM_PROVIDER is {settings.llm_provider!r}"
+        )
+
+    async def answer(question: str, items: Sequence[RetrievedChunk]) -> dict[str, Any]:
+        started = time.perf_counter()
+        out: dict[str, Any] = {
+            "text": None,
+            "raw_text": "",
+            "cited": [],
+            "dropped": [],
+            "refused": None,
+            "sources": [],
+            "external_links": [],
+            "error": None,
+            "first_token_ms": None,
+        }
+        tokens: list[str] = []
+        async for event in answer_events(
+            question,
+            items,
+            llm,
+            max_context_tokens=settings.max_context_tokens,
+            answer_max_tokens=settings.answer_max_tokens,
+            deadline_seconds=settings.llm_answer_deadline_seconds,
+        ):
+            if event.event == "sources":
+                out["sources"] = [s["text"] for s in event.data["sources"]]
+            elif event.event == "token":
+                if out["first_token_ms"] is None:
+                    out["first_token_ms"] = (time.perf_counter() - started) * 1000
+                tokens.append(event.data["text"])
+            elif event.event == "citations":
+                out["cited"] = [c["number"] for c in event.data["citations"]]
+                out["dropped"] = list(event.data["dropped"])
+            elif event.event == "done":
+                out["text"] = event.data["answer"]
+                out["refused"] = event.data["refused"]
+                out["external_links"] = event.data["external_links"]
+            elif event.event == "error":
+                out["error"] = event.data["code"]
+        out["raw_text"] = "".join(tokens)
+        out["generate_ms"] = (time.perf_counter() - started) * 1000
+        return out
+
+    return answer
 
 
 def build_search(
-    retrieve_fn: RetrieveFn, tenant_id: UUID, doc_names: Mapping[UUID, str]
+    retrieve_fn: RetrieveFn,
+    tenant_id: UUID,
+    doc_names: Mapping[UUID, str],
+    answer_fn: AnswerFn | None = None,
 ) -> SearchFn:
     async def search(question: dict[str, Any], config: RunConfig) -> SearchResult:
         result = await retrieve_fn(
@@ -49,7 +113,11 @@ def build_search(
             for item in result.items
         ]
         stages = {s.name: s.ms for s in result.trace.stages} if result.trace else {}
-        return SearchResult(hits=hits, stages_ms=stages)
+        answer = None
+        if answer_fn is not None:
+            answer = await answer_fn(question["question"], result.items)
+            stages["generate"] = answer["generate_ms"]
+        return SearchResult(hits=hits, stages_ms=stages, answer=answer)
 
     return search
 

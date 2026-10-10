@@ -16,6 +16,7 @@ import json
 import subprocess
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -146,6 +147,72 @@ def _line(
         "stages_ms": result.stages_ms,
         "total_ms": total_ms,
         "answer": result.answer,
+        "checks": _checks(question, result.answer),
+    }
+
+
+def _checks(
+    question: dict[str, Any], answer: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Deterministic answer checks; None without an answer (or when generation failed)."""
+    if answer is None or answer["text"] is None:
+        return None
+    from eval.judge import AnswerRecord, deterministic_checks
+
+    return deterministic_checks(
+        AnswerRecord(
+            qid=question["id"],
+            question=question["question"],
+            answerable=bool(question["answerable"]),
+            reference_answer=question.get("reference_answer", ""),
+            gold_spans=[g["span"] for g in question["gold"]],
+            answer=answer["text"],
+            cited=answer["cited"],
+            dropped=answer["dropped"],
+            sources=answer["sources"],
+        )
+    )
+
+
+def summarise_generation(lines: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Counts, not just rates: refusal outcomes, citations, reference facts, errors."""
+    generated = [x for x in lines if x.get("answer") is not None]
+    checked = [x for x in generated if x["checks"] is not None]
+    outcomes = Counter(x["checks"]["refusal"]["outcome"] for x in checked)
+    valid = sum(x["checks"]["citations"]["valid"] for x in checked)
+    invalid = sum(x["checks"]["citations"]["invalid"] for x in checked)
+    answered = [x for x in checked if x["checks"]["refusal"]["outcome"] == "answered"]
+    shares = [x["checks"]["facts"]["share"] for x in answered]
+    scored = [s for s in shares if s is not None]
+    gen_ms = sorted(x["answer"]["generate_ms"] for x in generated)
+    return {
+        "n": len(generated),
+        "errors": dict(
+            Counter(x["answer"]["error"] for x in generated if x["answer"]["error"])
+        ),
+        "answered": outcomes["answered"],
+        "correct_refusal": outcomes["correct_refusal"],
+        "missed_refusal": outcomes["missed_refusal"],
+        "false_refusal": outcomes["false_refusal"],
+        "near_refusal": sum(
+            1 for x in checked if x["checks"]["refusal"]["near_refusal"]
+        ),
+        "citations": {"valid": valid, "invalid": invalid},
+        "answered_without_citation": sum(
+            1 for x in answered if not x["checks"]["citations"]["valid"]
+        ),
+        "answered_citing_gold": sum(
+            1 for x in answered if x["checks"]["citations"]["cites_gold"]
+        ),
+        "facts": {
+            "mean_share": mean(scored),
+            "all_found": sum(1 for s in scored if s == 1.0),
+            "scorable": len(scored),
+        },
+        "generate_ms": {
+            "p50": gen_ms[len(gen_ms) // 2] if gen_ms else None,
+            "max": gen_ms[-1] if gen_ms else None,
+        },
     }
 
 
@@ -230,7 +297,15 @@ async def run_questions(
             results.flush()
 
     lines = [json.loads(line) for line in results_path.read_text().splitlines()]
-    summary = summarise([x for x in lines if x["id"] in set(ids)])
+    selected = [x for x in lines if x["id"] in set(ids)]
+    summary = summarise(selected)
+    if any(x.get("answer") is not None for x in selected):
+        types = sorted({x["type"] for x in selected})
+        summary["generation"] = summarise_generation(selected)
+        summary["generation_per_type"] = {
+            t: summarise_generation([x for x in selected if x["type"] == t])
+            for t in types
+        }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     info["finished_at"] = datetime.now(UTC).isoformat()
     run_path.write_text(json.dumps(info, indent=1) + "\n")
