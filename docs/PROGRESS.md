@@ -319,6 +319,18 @@ Free setup only; ask before any run over 30 minutes.
   errors; 40 valid citations, 6 answers uncited, 15/40 cite gold; facts all-found 7/23. Format
   problems listed in eval-log.md (bare "[N]" answers, non-numeric/fused brackets, leftover
   `<answer>` tags). My rough reading: 23 right, 9 partial, 8 wrong. Real judge NOT run.
+- [x] 8.6e Checks before any change (Ollama stopped): `make lint` pass, `make test` 556 passed.
+- [x] 8.6f near_refusal is its own outcome (`211c620`): E3-gen q055 and q058 now count as
+  near-refusals, not misses (the old pattern caught neither). The fact check already ignored
+  facts the question states (`c8480ae`); q017's flaw is different (its reference holds a fact
+  the question doesn't ask for) and isn't fixed.
+- [x] 8.6g Calibration ready (`65942dd`, `43ca814` typing): the 15 come from the fixed 20-question
+  judge sample with no verdict needed: q007 q008 q012 q015 q018 q021 q022 q024 q027 q030 q034
+  q036 q044 q046 q056. You grade; the judge isn't run until you say "run the judge".
+- [ ] 8.6h Waiting for your review of the diff (it changes `/v1/chat` output), then 4 commits:
+  leftover-tag stripping; the `malformed` citations report plus a space after fused citations;
+  the eval citation check reading `malformed`; `eval/tools/rescore.py` and the E3-gen
+  re-score (`rescore.json`). `make lint` pass, `make test` 613 passed on that tree.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
