@@ -682,6 +682,7 @@
         "type": "object"
       },
       "LoginRequest": {
+        "additionalProperties": false,
         "description": "Log in with email and password.",
         "example": {
           "email": "owner@acme.example",
@@ -689,10 +690,13 @@
         },
         "properties": {
           "email": {
+            "maxLength": 320,
+            "minLength": 3,
             "title": "Email",
             "type": "string"
           },
           "password": {
+            "maxLength": 72,
             "title": "Password",
             "type": "string"
           }
@@ -1168,6 +1172,7 @@
         "type": "object"
       },
       "SignupRequest": {
+        "additionalProperties": false,
         "description": "Create a new tenant and its first (admin) user.",
         "example": {
           "email": "owner@acme.example",
@@ -1182,6 +1187,7 @@
             "type": "string"
           },
           "password": {
+            "maxLength": 72,
             "minLength": 8,
             "title": "Password",
             "type": "string"

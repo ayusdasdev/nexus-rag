@@ -232,3 +232,71 @@ async def test_v1_me_with_malformed_token_returns_401(client: AsyncClient) -> No
     )
 
     assert response.status_code == 401
+
+
+# --- M7 security review, HIGH-2: bounded credentials --------------------------------
+# bcrypt 5 raises ValueError past 72 bytes, which was an unhandled 500.
+
+
+def _signup_body(password: str, **extra: object) -> dict[str, object]:
+    return {
+        "tenant_name": "t",
+        "email": f"long-{uuid.uuid4().hex}@example.com",
+        "password": password,
+        **extra,
+    }
+
+
+async def test_a_72_byte_password_is_accepted(client: AsyncClient) -> None:
+    response = await client.post("/v1/auth/signup", json=_signup_body("p" * 72))
+
+    assert response.status_code == 201
+
+
+@pytest.mark.parametrize(
+    "password",
+    ["p" * 73, "€" * 30, "p" * 1_000_000],
+    ids=["73-ascii-bytes", "90-utf8-bytes-in-30-chars", "one-megabyte"],
+)
+async def test_signup_with_a_password_over_72_bytes_is_422_not_500(
+    client: AsyncClient, password: str
+) -> None:
+    response = await client.post("/v1/auth/signup", json=_signup_body(password))
+
+    assert response.status_code == 422
+    assert password[:100] not in response.text
+
+
+async def test_login_with_a_password_over_72_bytes_is_422_not_500(
+    client: AsyncClient,
+) -> None:
+    response = await client.post(
+        "/v1/auth/login", json={"email": "someone@example.com", "password": "p" * 73}
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["email", "tenant_name"])
+async def test_oversized_signup_fields_are_422(client: AsyncClient, field: str) -> None:
+    body = _signup_body("correct-horse-battery")
+    body[field] = "x" * 1000
+
+    assert (await client.post("/v1/auth/signup", json=body)).status_code == 422
+
+
+async def test_an_oversized_login_email_is_422(client: AsyncClient) -> None:
+    response = await client.post(
+        "/v1/auth/login", json={"email": "x" * 1000, "password": "whatever-123"}
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("path", ["/v1/auth/signup", "/v1/auth/login"])
+async def test_unknown_fields_in_credentials_are_422(
+    client: AsyncClient, path: str
+) -> None:
+    body = {**_signup_body("correct-horse-battery"), "role": "admin", "tenant_id": "x"}
+
+    assert (await client.post(path, json=body)).status_code == 422

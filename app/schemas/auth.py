@@ -1,40 +1,60 @@
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+
+# bcrypt hashes at most 72 bytes and bcrypt 5 raises past that, so the limit is in bytes
+# (a 30-character password of 3-byte characters is 90 bytes).
+MAX_PASSWORD_BYTES = 72
+
+
+def _at_most_72_bytes(password: str) -> str:
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"password must be at most {MAX_PASSWORD_BYTES} bytes")
+    return password
+
+
+# max_length (in characters) rejects huge bodies before the byte check runs.
+Password = Annotated[
+    str, Field(max_length=MAX_PASSWORD_BYTES), AfterValidator(_at_most_72_bytes)
+]
+Email = Annotated[str, Field(min_length=3, max_length=320)]
 
 
 class SignupRequest(BaseModel):
     """Create a new tenant and its first (admin) user."""
 
     tenant_name: str = Field(..., min_length=1, max_length=255)
-    email: str = Field(..., min_length=3, max_length=320)
-    password: str = Field(..., min_length=8)
+    email: Email
+    password: Annotated[Password, Field(min_length=8)]
 
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "example": {
                 "tenant_name": "Acme Corp",
                 "email": "owner@acme.example",
                 "password": "correct-horse-battery-staple",
             }
-        }
+        },
     )
 
 
 class LoginRequest(BaseModel):
     """Log in with email and password."""
 
-    email: str
-    password: str
+    email: Email
+    password: Password
 
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "example": {
                 "email": "owner@acme.example",
                 "password": "correct-horse-battery-staple",
             }
-        }
+        },
     )
 
 
