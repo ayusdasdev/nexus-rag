@@ -79,3 +79,44 @@ chunk outside the top 50 fused candidates cannot be recovered.
   Recall@1 stays at 6/7 or drops by one, since cross-encoders can underweight rare ids
   (WID-0042, RIGHT-07, flags) that BM25 ranked first.
 - **Cost.** Estimate ~38 s per search (up to 50 pairs at ~0.77 s), ~31 min for 48 questions.
+
+### E3 measured (2026-10-10, commit f145996, clean tree at start; eval/runs/E3-hybrid-rerank)
+
+Wall-clock 28 min 50 s for 48 questions (estimate was ~31 min); rerank median 37.6 s per
+search, max 52.0 s; peak RSS 3.3 GB.
+
+| run | R@1 | R@3 | R@5 | R@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| E2 hybrid | 0.451 (17/41) | 0.728 (28/41) | 0.776 (30/41) | 0.854 (34/41) | 0.628 | 0.692 |
+| E3 hybrid + rerank | 0.500 (20/41) | 0.707 (27/41) | 0.780 (31/41) | 0.870 (34/41) | 0.635 | 0.706 |
+
+Per type, fully covered at R@1 / R@3 / R@10, and MRR (E2 then E3):
+
+| type | E2 | E3 |
+|---|---|---|
+| factoid (17) | 8 / 15 / 16, MRR 0.655 | 10 / 12 / 15, MRR 0.680 |
+| paraphrase (10) | 2 / 4 / 6, MRR 0.325 | 4 / 8 / 8, MRR 0.550 |
+| exact-token (7) | 6 / 7 / 7, MRR 0.905 | 6 / 6 / 7, MRR 0.881 |
+| multi-chunk (7) | 1 / 2 / 5, MRR 0.719 | 0 / 1 / 4, MRR 0.401 |
+
+First-hit rank, E2 to E3: 11 questions up, 12 down, 18 unchanged.
+- Up: q007 3-2, q012 7-1, q016 2-1, q017 2-1, q022 3-1, q023 none-1, q024 none-3, q027 6-2,
+  q028 4-3, q038 3-1, q046 5-3.
+- Down: q003 1-2, q005 3-5, q006 2-none, q015 2-6, q021 3-5, q033 2-3, q034 1-6, q043 1-6,
+  q044 1-2, q045 2-3, q047 1-3, q050 3-7 (and q050 lost one of its three spans from the top 10).
+
+Hypotheses against measurement:
+- Overall R@10 at least 34/41: **held** (34/41). R@1 above 17/41: **held** (20/41). MRR above
+  0.628: held only nominally (0.635, +0.007), which is within noise.
+- Paraphrase: predicted q024 recovered (**right**, rank 3), q031 recovered (**wrong**, still not
+  in the top 10), q029 not recovered (**right**). q023, which I made no prediction for, went
+  from missed to rank 1. Paraphrase R@10 predicted 7-8/10: **8/10**.
+- Exact-token: R@10 7/7 (**held**), R@1 6/7 (**held**). But q034 (a CLI command) fell from
+  rank 1 to 6, and q038 rose from 3 to 1.
+- **Not predicted:** the reranker hurts multi-chunk (MRR 0.719 to 0.401, R@1 1 to 0, R@10
+  5 to 4) and lowers factoid R@3 (15 to 12, q006 out of the top 10). The gain is concentrated
+  in paraphrase; elsewhere rerank moves as many questions down as up. Hypothesis, untested:
+  the cross-encoder favours chunks that answer the whole question in one place, which a
+  question needing two chunks doesn't have.
+- With 7-17 questions per type, per-type moves of 1-2 questions are not evidence by themselves;
+  the paraphrase gain (+4 at R@3) and multi-chunk MRR drop are the largest effects measured.
