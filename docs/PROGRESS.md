@@ -307,7 +307,9 @@ Free setup only; ask before any run over 30 minutes.
   (E2 17/41), MRR 0.635 (E2 0.628). Paraphrase R@3 8/10 (E2 4/10), but multi-chunk MRR 0.401
   (E2 0.719) and factoid R@3 12/17 (E2 15/17). 11 questions up, 12 down. Judge now uses
   `<document>` tags per CLAUDE.md (`cec3af2`, judge never run).
-  **Next: one generation run waits for your OK (config recommendation in chat); real judge not run.**
+- [x] 8.6c `--generate` path (`5c0c062`): real answer pipeline per question, deterministic checks
+  per line, generation counts in summary.json; Ollama only. FakeLLM tests. Approved next: smoke
+  test (3 questions), then all 48 dev with E3 config + limit 6. Real judge NOT approved.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
