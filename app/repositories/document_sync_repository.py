@@ -34,7 +34,8 @@ def _engine() -> Engine:
     url = get_settings().database_url.replace(
         "postgresql+asyncpg", "postgresql+psycopg"
     )
-    return create_engine(url, pool_pre_ping=True)
+    # hide_parameters: a DB error message never carries chunk text or other values into logs.
+    return create_engine(url, pool_pre_ping=True, hide_parameters=True)
 
 
 def claim_for_processing(document_id: UUID) -> ClaimedDocument | None:
