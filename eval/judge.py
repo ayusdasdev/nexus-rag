@@ -120,15 +120,18 @@ _TENS = {
     if w != "_"
 }
 _NUMBER_WORD = re.compile(
-    rf"\b(?:({'|'.join(_TENS)})(?:[- ]({'|'.join(_UNITS[1:10])}))?|({'|'.join(_UNITS)}))\b"
+    rf"\b(?:({'|'.join(_TENS)})(?:[- ]({'|'.join(_UNITS[1:10])}))?|({'|'.join(_UNITS)}))\b",
+    re.IGNORECASE,
 )
+_CITED = re.compile(r"\[\s*\d[\d,\s]*\]")
 
 
 def _digits(text: str) -> str:
     def value(m: re.Match[str]) -> str:
-        if m.group(3):
-            return str(_UNITS.index(m.group(3)))
-        return str(_TENS[m.group(1)] + (_UNITS.index(m.group(2)) if m.group(2) else 0))
+        tens, unit, alone = (g.lower() if g else g for g in m.groups())
+        if alone:
+            return str(_UNITS.index(alone))
+        return str(_TENS[tens] + (_UNITS.index(unit) if unit else 0))
 
     return _NUMBER_WORD.sub(value, text)
 
@@ -140,8 +143,9 @@ def _norm_facts(text: str) -> str:
 def key_facts(reference: str) -> list[str]:
     """Checkable facts: tokens with a digit or underscore, and all-caps words (IDF)."""
     facts: list[str] = []
+    # Number words count too ("Ninety days" checks for 90).
     for raw in re.findall(
-        r"[A-Za-z0-9_][A-Za-z0-9_.,:\-']*", reference.replace("–", "-")
+        r"[A-Za-z0-9_][A-Za-z0-9_.,:\-']*", _digits(reference.replace("–", "-"))
     ):
         token = re.sub(r"'s$", "", raw.rstrip(".,:;'-"))
         checkable = re.search(r"[0-9_]", token) or re.fullmatch(r"[A-Z]{2,}", token)
@@ -151,13 +155,18 @@ def key_facts(reference: str) -> list[str]:
 
 
 def fact_check(rec: AnswerRecord) -> dict[str, Any]:
-    facts = key_facts(rec.reference_answer) if rec.answerable else []
-    answer = _norm_facts(rec.answer)
-    found = [
+    def has(fact: str, text: str) -> bool:
+        return bool(re.search(rf"(?<![0-9a-z_]){re.escape(fact)}(?![0-9a-z_])", text))
+
+    # A fact the question already states is no evidence the answer knew it.
+    question = _norm_facts(rec.question)
+    facts = [
         f
-        for f in facts
-        if re.search(rf"(?<![0-9a-z_]){re.escape(f)}(?![0-9a-z_])", answer)
+        for f in (key_facts(rec.reference_answer) if rec.answerable else [])
+        if not has(f, question)
     ]
+    answer = _norm_facts(_CITED.sub(" ", rec.answer))  # [2] is a citation, not a 2
+    found = [f for f in facts if has(f, answer)]
     return {
         "facts": facts,
         "found": found,

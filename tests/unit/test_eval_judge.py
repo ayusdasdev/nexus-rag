@@ -218,3 +218,27 @@ def test_the_judge_sample_is_20_dev_questions_stratified_and_reproducible() -> N
         "multi-chunk": 3,
         "unanswerable": 3,
     }
+
+
+def test_spelled_out_numbers_in_the_reference_are_checkable_facts() -> None:
+    assert key_facts("Ninety days; after that, two years as hourly averages.") == [
+        "90",
+        "2",
+    ]
+
+
+def test_a_fact_already_in_the_question_is_not_evidence() -> None:
+    rec = _rec(
+        question="Which plan is missing from the README?",
+        reference_answer="Enterprise; the README lists 3 plans.",
+        answer="The README is missing it.",
+    )
+
+    assert fact_check(rec)["facts"] == ["3"]
+    assert fact_check(rec)["share"] == 0.0
+
+
+def test_a_citation_number_is_not_a_found_fact() -> None:
+    rec = _rec(reference_answer="Two years.", answer="Hourly averages are kept [2].")
+
+    assert fact_check(rec)["share"] == 0.0
