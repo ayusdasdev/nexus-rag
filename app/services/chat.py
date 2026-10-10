@@ -139,7 +139,7 @@ async def answer_events(
 
     if not built.sources:
         yield ChatEvent("token", {"text": REFUSAL})
-        yield ChatEvent("citations", {"citations": [], "dropped": []})
+        yield ChatEvent("citations", {"citations": [], "dropped": [], "malformed": []})
         yield ChatEvent(
             "done",
             {
@@ -199,6 +199,7 @@ async def answer_events(
                 for n in citations.numbers
             ],
             "dropped": citations.dropped,
+            "malformed": citations.malformed,
         },
     )
     yield ChatEvent(

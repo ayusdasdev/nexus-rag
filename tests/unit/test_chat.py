@@ -74,6 +74,7 @@ async def test_events_come_in_order_sources_tokens_citations_done() -> None:
             }
         ],
         "dropped": [],
+        "malformed": [],
     }
     assert events[4].data == {
         "answer": "Two hours [1].",
@@ -119,6 +120,27 @@ async def test_an_invalid_citation_is_stripped_from_the_answer_and_reported() ->
     assert [c["number"] for c in citations.data["citations"]] == [1]
     assert citations.data["dropped"] == [4]
     assert done.data["answer"] == "Two hours [1]."
+
+
+@pytest.mark.asyncio
+async def test_brackets_that_are_not_citations_are_reported_and_a_fused_one_spaced() -> (
+    None
+):
+    llm = FakeLLM(["[M6] Two hours [1]and", " more [9]."])
+
+    events = await _events([_hit("Charging takes two hours.")], llm)
+
+    citations, done = events[-2], events[-1]
+    assert citations.data["malformed"] == ["[M6]", "[1]and"]
+    assert citations.data["dropped"] == [9]
+    assert done.data["answer"] == "[M6] Two hours [1] and more."
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_without_sources_reports_no_malformed_citations() -> None:
+    events = await _events([], FakeLLM(["unused"]))
+
+    assert events[2].data == {"citations": [], "dropped": [], "malformed": []}
 
 
 @pytest.mark.asyncio

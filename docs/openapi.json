@@ -252,11 +252,20 @@
             },
             "title": "Dropped",
             "type": "array"
+          },
+          "malformed": {
+            "description": "Bracketed text that isn't a [N] citation (e.g. [M6]) and citations fused to the next word (e.g. [3]RIGHT), outside code. Reported only; kept in the answer.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Malformed",
+            "type": "array"
           }
         },
         "required": [
           "citations",
-          "dropped"
+          "dropped",
+          "malformed"
         ],
         "title": "CitationsEvent",
         "type": "object"
@@ -1659,7 +1668,7 @@
           "200": {
             "content": {
               "text/event-stream": {
-                "example": "event: sources\ndata: {\"sources\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\", \"chunk_index\": 0, \"heading_path\": \"Guide > Charging\", \"text\": \"Charging takes two hours.\"}]}\n\nevent: token\ndata: {\"text\": \"Two hours [1].\"}\n\nevent: citations\ndata: {\"citations\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\"}], \"dropped\": []}\n\nevent: done\ndata: {\"answer\": \"Two hours [1].\", \"refused\": false, \"external_links\": [], \"skipped_chunks\": 0}\n\n"
+                "example": "event: sources\ndata: {\"sources\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\", \"chunk_index\": 0, \"heading_path\": \"Guide > Charging\", \"text\": \"Charging takes two hours.\"}]}\n\nevent: token\ndata: {\"text\": \"Two hours [1].\"}\n\nevent: citations\ndata: {\"citations\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\"}], \"dropped\": [], \"malformed\": []}\n\nevent: done\ndata: {\"answer\": \"Two hours [1].\", \"refused\": false, \"external_links\": [], \"skipped_chunks\": 0}\n\n"
               }
             },
             "description": "Server-Sent Events: sources, token (repeated), citations, done; or error. Each data line is JSON. Payload schemas: SourcesEvent, TokenEvent, CitationsEvent, DoneEvent, ErrorEvent"
@@ -2099,7 +2108,7 @@
           "200": {
             "content": {
               "text/event-stream": {
-                "example": "event: sources\ndata: {\"sources\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\", \"chunk_index\": 0, \"heading_path\": \"Guide > Charging\", \"text\": \"Charging takes two hours.\"}]}\n\nevent: token\ndata: {\"text\": \"Two hours [1].\"}\n\nevent: citations\ndata: {\"citations\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\"}], \"dropped\": []}\n\nevent: done\ndata: {\"answer\": \"Two hours [1].\", \"refused\": false, \"external_links\": [], \"skipped_chunks\": 0}\n\n"
+                "example": "event: sources\ndata: {\"sources\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\", \"chunk_index\": 0, \"heading_path\": \"Guide > Charging\", \"text\": \"Charging takes two hours.\"}]}\n\nevent: token\ndata: {\"text\": \"Two hours [1].\"}\n\nevent: citations\ndata: {\"citations\": [{\"number\": 1, \"chunk_id\": \"0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c\", \"document_id\": \"3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10\"}], \"dropped\": [], \"malformed\": []}\n\nevent: done\ndata: {\"answer\": \"Two hours [1].\", \"refused\": false, \"external_links\": [], \"skipped_chunks\": 0}\n\n"
               }
             },
             "description": "Same events as POST /v1/chat; `sources` also carries `rewritten_query`, the query retrieval actually used."

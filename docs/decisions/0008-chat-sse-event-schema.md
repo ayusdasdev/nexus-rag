@@ -18,8 +18,12 @@ answer are never fetched.
   - `sources`: `[{number, chunk_id, document_id, chunk_index, heading_path, text}]`. `number`
     is the N in `[N]` and in `<document id='N'>`.
   - `token`: `{text}`, raw model output, for live display only.
-  - `citations`: `{citations: [{number, chunk_id, document_id}], dropped: [n...]}`. The ids
-    are resolved on the server from `number`, never taken from model text.
+  - `citations`: `{citations: [{number, chunk_id, document_id}], dropped: [n...],
+    malformed: [text...]}`. The ids are resolved on the server from `number`, never taken
+    from model text. `malformed` (added in M8) reports, outside code, bracketed text that
+    isn't a `[N]` citation (`[pymupdf4llm]`, `[M6]`) and citations fused to the next word
+    (`[3]RIGHT-09`); it is report-only, and the text keeps them. A fused citation gets a
+    space in `done.answer`, and so does a dropped citation that sat between two words.
   - `done`: `{answer, refused, external_links, skipped_chunks}`. `answer` is the
     authoritative text, with invalid citations removed and any echoed prompt wrappers
     (`<document ...>`, `</document>`, `<question>`, ...) stripped (seen in M5 5.5). Leftover

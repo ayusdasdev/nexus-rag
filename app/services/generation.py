@@ -5,6 +5,7 @@ Nothing here does I/O except reading the prompt files, and nothing here fetches 
 
 import math
 import re
+from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -47,6 +48,9 @@ class Citations:
     numbers: list[int]
     # Out-of-range numbers that were stripped from text, each once.
     dropped: list[int]
+    # Brackets that aren't a [N] citation, and citations fused to the next word, outside
+    # code, each once. Reported only; the text keeps them.
+    malformed: list[str]
 
 
 def approx_tokens(text: str) -> int:
@@ -144,11 +148,12 @@ def parse_citations(text: str, source_count: int) -> Citations:
     """Keep citations to documents 1..source_count; strip and report any other number.
 
     Reads [1], [1][3] and [2, 3]. A citation left with no valid number is removed
-    together with the spaces before it.
+    together with the spaces before it. A citation fused to the next word gets a space.
     """
     numbers: list[int] = []
     dropped: list[int] = []
     out: list[str] = []
+    in_code = _in_code(text)
     last = 0
     for match in _CITATION.finditer(text):
         cited = [int(part) for part in match.group(1).split(",")]
@@ -165,11 +170,44 @@ def parse_citations(text: str, source_count: int) -> Citations:
         else:
             replacement = ""
             before = before.rstrip(" \t")
+        fused = _WORD_CHAR.match(text, match.end()) and not in_code(match.start())
+        if fused and (replacement or before[-1:].strip()):
+            replacement += " "
         out.append(before)
         out.append(replacement)
         last = match.end()
     out.append(text[last:])
-    return Citations(text="".join(out), numbers=numbers, dropped=dropped)
+    return Citations(
+        text="".join(out),
+        numbers=numbers,
+        dropped=dropped,
+        malformed=find_malformed_citations(text),
+    )
+
+
+# One bracket pair on one line, not a Markdown link target. Bounded, so it stays linear.
+_BRACKET = re.compile(r"\[([^\[\]\n]{1,80})\](?!\()")
+_WORD_CHAR = re.compile(r"\w")
+_FUSED_WORD = re.compile(r"[\w-]{1,40}")
+_CHECKBOXES = (" ", "x", "X")
+
+
+def find_malformed_citations(text: str) -> list[str]:
+    """Bracketed text outside code that isn't a [N] citation ("[pymupdf4llm]", "[M6]"),
+    and citations fused to the next word ("[3]RIGHT-09"), in order, each once.
+    Markdown links and [ ]/[x] checkboxes don't count."""
+    in_code = _in_code(text)
+    found: dict[str, None] = {}
+    for match in _BRACKET.finditer(text):
+        if in_code(match.start()):
+            continue
+        if _CITATION.fullmatch(match.group(0)):
+            word = _FUSED_WORD.match(text, match.end())
+            if word:
+                found.setdefault(match.group(0) + word.group(0))
+        elif match.group(1) not in _CHECKBOXES:
+            found.setdefault(match.group(0))
+    return list(found)
 
 
 # Our own section tags echoed back by the model (seen with llama3.2:3b, M5 5.5 Q3), raw or
@@ -206,6 +244,17 @@ def code_spans(text: str) -> list[tuple[int, int]]:
         spans.append((runs[i][0], runs[j][1]))
         i = j + 1
     return spans
+
+
+def _in_code(text: str) -> Callable[[int], bool]:
+    spans = code_spans(text)
+    starts = [start for start, _ in spans]
+
+    def check(position: int) -> bool:
+        i = bisect_right(starts, position) - 1
+        return i >= 0 and position < spans[i][1]
+
+    return check
 
 
 def _outside_code(text: str, fix: Callable[[str], str]) -> str:

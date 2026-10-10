@@ -158,6 +158,61 @@ def test_parse_citations_leaves_other_brackets_alone() -> None:
     assert result.dropped == []
 
 
+# Seen in the M8 E3-gen run: q005 [pymupdf4llm], q015 [M6], q038 [X-Accel-Buffering: no]
+# (brackets no [N] check sees), and q014 "[3]RIGHT-09" (a citation fused to a word).
+@pytest.mark.parametrize(
+    ("text", "malformed"),
+    [
+        ("[pymupdf4llm] [5] is used under the AGPL.", ["[pymupdf4llm]"]),
+        ("[M6] According to the document.", ["[M6]"]),
+        ("[X-Accel-Buffering: no] is sent [6].", ["[X-Accel-Buffering: no]"]),
+        ("See [note] and [1a] and [note].", ["[note]", "[1a]"]),
+        ("According to document [3]RIGHT-09, admins can.", ["[3]RIGHT-09"]),
+    ],
+)
+def test_parse_citations_reports_brackets_that_are_not_citations(
+    text: str, malformed: list[str]
+) -> None:
+    assert parse_citations(text, source_count=6).malformed == malformed
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "A [1]. B [1][3], C [2, 3]; D [4]",
+        "Tick [ ] or [x] or [X].",
+        "A [link](https://example.com) and [doc](#a).",
+        "In code `rows[i]` and\n```\nx = a[k]y\n```\nonly.",
+        "word[1] directly after a word is fine [2].",
+    ],
+)
+def test_parse_citations_reports_nothing_for_citations_and_normal_brackets(
+    text: str,
+) -> None:
+    assert parse_citations(text, source_count=6).malformed == []
+
+
+def test_a_citation_fused_to_the_next_word_gets_a_space() -> None:
+    result = parse_citations("According to document [3]RIGHT-09, admins.", 3)
+
+    assert result.text == "According to document [3] RIGHT-09, admins."
+    assert result.numbers == [3]
+
+
+def test_a_dropped_citation_between_two_words_does_not_fuse_them() -> None:
+    result = parse_citations("Two hours [9]and more [9]x.", 2)
+
+    assert result.text == "Two hours and more x."
+    assert result.dropped == [9]
+
+
+def test_malformed_citation_reporting_is_linear_on_hostile_output() -> None:
+    for text in ("[" * 200_000, "[a]" * 70_000, "[1]x" * 50_000, "`[a]" * 50_000):
+        start = time.perf_counter()
+        parse_citations(text, source_count=2)
+        assert time.perf_counter() - start < 1.0
+
+
 # --- find_external_links ----------------------------------------------------------
 
 

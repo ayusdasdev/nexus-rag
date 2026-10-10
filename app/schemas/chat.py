@@ -64,6 +64,12 @@ class CitationsEvent(BaseModel):
     dropped: list[int] = Field(
         description="Numbers the model cited that weren't sent; stripped from the answer."
     )
+    malformed: list[str] = Field(
+        description=(
+            "Bracketed text that isn't a [N] citation (e.g. [M6]) and citations fused to "
+            "the next word (e.g. [3]RIGHT), outside code. Reported only; kept in the answer."
+        )
+    )
 
 
 class DoneEvent(BaseModel):
@@ -89,7 +95,7 @@ SSE_EXAMPLE = (
     'data: {"text": "Two hours [1]."}\n\n'
     "event: citations\n"
     'data: {"citations": [{"number": 1, "chunk_id": "0b6e2c1e-7d3a-5f4b-9a8c-1e2d3f4a5b6c", '
-    '"document_id": "3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10"}], "dropped": []}\n\n'
+    '"document_id": "3f1c9a52-0d7e-4b8a-9c21-6e5f4a3b2c10"}], "dropped": [], "malformed": []}\n\n'
     "event: done\n"
     'data: {"answer": "Two hours [1].", "refused": false, "external_links": [], '
     '"skipped_chunks": 0}\n\n'
