@@ -2,10 +2,12 @@
 
     uv run python -m eval.tools.calibrate --run E3-gen
 
-Shows 15 answers from the judged sample of a generation run, one at a time: question,
-reference, sources and answer. You grade correctness (0/1/2) and faithfulness (y/n). Each
-grade is saved as soon as you give it; q quits and a re-run resumes. Then it prints how
-often the judge agrees with you. Your grades are the ground truth; the judge never sees them.
+Shows 15 answers of a generation run, one at a time: question, reference, sources and
+answer. The 15 are drawn (seeded) from the fixed 20-question judge sample, so you can grade
+before the judge has run. You grade correctness (0/1/2) and faithfulness (y/n). Each grade
+is saved to eval/calibration/<run>.grades.jsonl as soon as you give it; q quits and a re-run
+resumes. You see no checks or verdicts. Once the judge has run, a re-run prints how often
+it agrees with you. Your grades are the ground truth; the judge never reads them.
 """
 
 import argparse
@@ -98,37 +100,50 @@ def agreement(human: Mapping[str, Grade], judge: Mapping[str, Grade]) -> dict[st
     }
 
 
+def calibration_items(
+    questions: Sequence[Mapping[str, Any]],
+    split: Mapping[str, Sequence[str]],
+    lines: Sequence[Mapping[str, Any]],
+    seed: int = 20261010,
+) -> list[dict[str, Any]]:
+    """The 15 to grade: drawn from the dev-only judge sample, with the run's stored answer.
+    Only what the grader needs; never a check or a verdict."""
+    from eval.judge import judge_sample
+
+    ids = calibration_ids(judge_sample(questions, split["dev"]), seed)
+    by_q = {q["id"]: q for q in questions}
+    answers = {x["id"]: x.get("answer") for x in lines}
+    missing = [i for i in ids if not (answers.get(i) or {}).get("text")]
+    if missing:
+        raise SystemExit(f"the run has no answer for {missing}")
+    return [
+        {
+            "id": i,
+            "question": by_q[i]["question"],
+            "reference_answer": by_q[i].get("reference_answer", ""),
+            "sources": answers[i]["sources"],
+            "answer": answers[i]["text"],
+        }
+        for i in ids
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
+    from eval.dataset import DATASETS, load_questions
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--run", required=True, help="a generation run's tag in eval/runs/"
     )
     parser.add_argument("--seed", type=int, default=20261010)
     args = parser.parse_args(argv)
+    run_dir = ROOT / "eval" / "runs" / args.run
+    dataset = json.loads((run_dir / "run.json").read_text())["dataset"]
+    split = json.loads((DATASETS / f"{dataset}.split.json").read_text())
     lines = [
-        json.loads(x)
-        for x in (ROOT / "eval" / "runs" / args.run / "results.jsonl")
-        .read_text()
-        .splitlines()
+        json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines()
     ]
-    judged = {
-        x["id"]: x for x in lines if x.get("answer") and x["answer"].get("verdict")
-    }
-    if len(judged) < CALIBRATION_SIZE:
-        raise SystemExit(
-            f"{args.run} has {len(judged)} judged answers; need {CALIBRATION_SIZE}"
-        )
-    ids = calibration_ids(list(judged), args.seed)
-    items = [
-        {
-            "id": i,
-            **{
-                k: judged[i]["answer"][k]
-                for k in ("question", "reference_answer", "answer", "sources")
-            },
-        }
-        for i in ids
-    ]
+    items = calibration_items(load_questions(dataset), split, lines, args.seed)
     out = ROOT / "eval" / "calibration" / f"{args.run}.grades.jsonl"
     grade(items, out)
     human = {
@@ -136,12 +151,17 @@ def main(argv: list[str] | None = None) -> int:
         for g in map(json.loads, out.read_text().splitlines())
     }
     verdicts = {
-        i: (
-            judged[i]["answer"]["verdict"]["correctness"],
-            judged[i]["answer"]["verdict"]["faithful"],
+        x["id"]: (
+            x["answer"]["verdict"]["correctness"],
+            x["answer"]["verdict"]["faithful"],
         )
-        for i in ids
+        for x in lines
+        if x.get("answer") and x["answer"].get("verdict")
     }
+    print(f"{len(human)}/{len(items)} graded, saved in {out.relative_to(ROOT)}")
+    if not verdicts:
+        print("the judge has not run on this run yet; no agreement to report")
+        return 0
     print(json.dumps(agreement(human, verdicts), indent=1))
     return 0
 
