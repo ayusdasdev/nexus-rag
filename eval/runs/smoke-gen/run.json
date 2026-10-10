@@ -1,0 +1,23 @@
+{
+ "dataset": "v1",
+ "split": "dev",
+ "split_seed": 20261010,
+ "git_sha": "dba1c2227939e78dbed227a20ff9ceff58977c9d",
+ "git_dirty": false,
+ "generate": true,
+ "config": {
+  "mode": "hybrid",
+  "rerank": true,
+  "candidates": 40,
+  "expand": "none",
+  "limit": 6
+ },
+ "runner_seed": 0,
+ "question_ids": [
+  "q001",
+  "q053",
+  "q043"
+ ],
+ "started_at": "2026-10-10T11:57:57.212437+00:00",
+ "finished_at": "2026-10-10T12:06:31.349685+00:00"
+}
