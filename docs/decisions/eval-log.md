@@ -185,7 +185,7 @@ paraphrased refusals; the citation check doesn't see non-numeric brackets; the f
 penalises reference facts the question didn't ask for (q017).
 
 Format problems over all 48 (counted by pattern and read by me):
-- Starts with a citation: 28/48 answers.
+- Starts with a bracket: 31/48 answers (28 numeric citations, 3 non-numeric: q005, q015, q038).
 - A citation and nothing else: q053 "[6]", q040 "[5]".
 - Brackets the citation check can't see: q005 `[pymupdf4llm]`, q015 `[M6]`,
   q038 `[X-Accel-Buffering: no]`. Fused to a word: q014 `[3]RIGHT-09`.
