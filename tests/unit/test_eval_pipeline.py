@@ -1,0 +1,77 @@
+"""eval/pipeline.build_search: a RunConfig maps onto retrieve()'s arguments, and hits come
+back with their document's file name and per-stage timings (M8)."""
+
+import asyncio
+from typing import Any
+from uuid import UUID, uuid4
+
+import pytest
+
+from app.services.retrieval import RetrievedChunk, RetrieveResult, StageTiming, Trace
+from eval.pipeline import build_search
+from eval.runner import Mode, RunConfig
+
+TENANT = uuid4()
+DOC = uuid4()
+
+
+def _fake_retrieve(seen: list[dict[str, Any]]) -> Any:
+    async def retrieve(**kwargs: Any) -> RetrieveResult:
+        seen.append(kwargs)
+        item = RetrievedChunk(
+            chunk_id=UUID(int=1),
+            document_id=DOC,
+            chunk_index=3,
+            text="t",
+            heading_path=None,
+            page=None,
+            score=0.5,
+            rank=1,
+        )
+        trace = Trace(
+            stages=[StageTiming("embed_query", 2.0), StageTiming("rerank", 9.0)],
+            dense=[],
+            sparse=[],
+            fused=[],
+            rerank=[],
+        )
+        return RetrieveResult(items=[item], trace=trace)
+
+    return retrieve
+
+
+@pytest.mark.parametrize(
+    "mode,dense,sparse",
+    [("dense", True, False), ("sparse", False, True), ("hybrid", True, True)],
+)
+def test_config_maps_onto_retrieve(mode: Mode, dense: bool, sparse: bool) -> None:
+    seen: list[dict[str, Any]] = []
+    search = build_search(_fake_retrieve(seen), TENANT, {DOC: "a.md"})
+    config = RunConfig(
+        mode=mode, rerank=False, candidates=20, expand="neighbors", limit=5
+    )
+
+    asyncio.run(search({"id": "q1", "question": "Q?"}, config))
+
+    call = seen[0]
+    assert (call["use_dense"], call["use_sparse"]) == (dense, sparse)
+    assert (call["use_rerank"], call["candidates"], call["expand"], call["limit"]) == (
+        False,
+        20,
+        "neighbors",
+        5,
+    )
+    assert (
+        call["tenant_id"] == TENANT and call["query"] == "Q?" and call["trace"] is True
+    )
+
+
+def test_hits_carry_the_file_name_and_stage_timings() -> None:
+    search = build_search(_fake_retrieve([]), TENANT, {DOC: "a.md"})
+
+    result = asyncio.run(search({"id": "q1", "question": "Q?"}, RunConfig()))
+
+    hit = result.hits[0]
+    assert (hit.document, hit.chunk_index, hit.text, hit.score) == ("a.md", 3, "t", 0.5)
+    assert hit.chunk_id == str(UUID(int=1))
+    assert result.stages_ms == {"embed_query": 2.0, "rerank": 9.0}
