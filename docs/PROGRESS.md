@@ -273,10 +273,16 @@ Free setup only; ask before any run over 30 minutes.
   Parse findings: guide.pdf code-box text became headings (wrong `heading_path` on many
   chunks), and the guide's example ADR block survives only as a heading (bucket A parse loss);
   generation-observations.md repeats sample-doc text verbatim, so spans can hit in two docs.
-- [~] 8.2 60 candidates drafted in-session (21 factoid, 12 paraphrase, 9 exact-token, 9
-  multi-chunk, 9 unanswerable) in `eval/datasets/candidates.jsonl`; every span verified inside
-  one real chunk. `eval/tools/review.py` (keep/edit/reject, resumable). **Waiting for your
-  review**, batch 1 of 3 (q001-q020). Then: span test on v1, 20% hold-out.
+- [x] 8.2 Dataset v1 locked (`240fa02`, `eb4fd87`): 60 questions you approved in 3 batches
+  (21 factoid, 12 paraphrase, 9 exact-token, 9 multi-chunk, 9 unanswerable; q020 rejected and
+  replaced by q061), 63 gold spans, every question with its wording_origin. Hold-out 20%,
+  stratified, seed 20261010: 48 dev / 12 hold-out (factoid 4, others 2 each). Tests: v1 shape,
+  split reproducible, ids in exactly one split; all 63 spans in the parsed frozen docs.
+  Per-type hold-out numbers (n = 2) will be reported as anecdotes, not rates.
+- Run-time estimates (scaled from measured rates, not yet measured on this corpus): E0-E2
+  (no rerank) about 1 min each on the 48 dev questions; E3 (rerank, up to 50 pairs at
+  ~0.77 s/pair, ~38 s per search) about 31 min on dev, over the 30-min line, so it needs your OK;
+  one generation run on dev about 1.8-2.7 h (needs your OK).
 - [x] 8.3 `eval/metrics.py` with hand-computed tests (`aed8ce0`).
 - [ ] 8.4 `eval/judge.py` and `eval/prompts/`: claim-level faithfulness, 0-1-2 correctness, refusal
   detection. Calibration tool where **you** hand-grade 15 answers. A local judge is reported as rough.
