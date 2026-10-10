@@ -303,7 +303,11 @@ Free setup only; ask before any run over 30 minutes.
 - [ ] 8.5 `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
 - [x] 8.6a E0-E2 on dev (`44bd4d0`, eval-log.md): Recall@10 dense 31/41, sparse 25/41,
   hybrid 34/41; MRR 0.532 / 0.546 / 0.628. Paraphrase weakest everywhere (hybrid 6/10).
-  **Next: E3 (hybrid + rerank, ~31 min estimated) waits for your OK; no generation run yet.**
+- [x] 8.6b E3 hybrid + rerank on dev (`09de946`, 28 min 50 s): R@10 34/41 (E2 34/41), R@1 20/41
+  (E2 17/41), MRR 0.635 (E2 0.628). Paraphrase R@3 8/10 (E2 4/10), but multi-chunk MRR 0.401
+  (E2 0.719) and factoid R@3 12/17 (E2 15/17). 11 questions up, 12 down. Judge now uses
+  `<document>` tags per CLAUDE.md (`cec3af2`, judge never run).
+  **Next: one generation run waits for your OK (config recommendation in chat); real judge not run.**
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
