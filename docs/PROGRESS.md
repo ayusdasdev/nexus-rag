@@ -284,8 +284,13 @@ Free setup only; ask before any run over 30 minutes.
   ~0.77 s/pair, ~38 s per search) about 31 min on dev, over the 30-min line, so it needs your OK;
   one generation run on dev about 1.8-2.7 h (needs your OK).
 - [x] 8.3 `eval/metrics.py` with hand-computed tests (`aed8ce0`).
-- [ ] 8.4 `eval/judge.py` and `eval/prompts/`: claim-level faithfulness, 0-1-2 correctness, refusal
-  detection. Calibration tool where **you** hand-grade 15 answers. A local judge is reported as rough.
+- [x] 8.4 Judge (`389a009`): deterministic checks on every answer (refusal by the exact
+  sentence, citation validity + gold support, reference-fact check on numbers/identifiers) and
+  a one-call LLM judge (0-1-2 correctness, faithful + unsupported claims; prompts in
+  `eval/prompts/`), unreadable verdicts recorded as errors. Fixed 20-question dev sample (seed
+  20261010): q006 q007 q008 q012 q015 q018 q021 q022 q024 q027 q030 q034 q035 q036 q044 q046
+  q050 q053 q056 q057. Calibration tool (`dbc6696`): you grade 15, agreement with counts.
+  FakeLLM only; **the real judge has not been run**. A local judge is reported as rough.
 - [x] 8.5a v1 final (`3c488d5`; sha256 pin test `16ae46a`): any change becomes v2. Runner
   `eval/runner.py` (`e8380e3`): `--set mode/rerank/candidates/expand/limit`, `--split dev`;
   `holdout` refused without `--final-holdout`; one line per question flushed as it finishes,
