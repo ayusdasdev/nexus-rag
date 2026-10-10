@@ -164,3 +164,32 @@ def test_the_real_wiring_builds_an_answerer_only_when_generating() -> None:
     with pytest.raises(SystemExit, match="ollama"):
         answer_fn_for(True, Settings.model_construct(llm_provider="anthropic"), build)
     assert len(built) == 1  # refused before any provider was built
+
+
+def _scored(outcome: str, near: bool, answerable: bool) -> dict[str, Any]:
+    return {
+        "answerable": answerable,
+        "answer": {"generate_ms": 1.0, "error": None},
+        "checks": {
+            "refusal": {"refused": False, "outcome": outcome, "near_refusal": near},
+            "citations": {"valid": 0, "invalid": 0, "cites_gold": None},
+            "facts": {"share": None},
+        },
+    }
+
+
+def test_the_summary_counts_near_refusals_apart_from_correct_and_missed_ones() -> None:
+    lines = [
+        _scored("correct_refusal", False, False),
+        _scored("near_refusal", True, False),
+        _scored("near_refusal", True, False),
+        _scored("missed_refusal", False, False),
+        _scored("answered", True, True),
+        _scored("answered", False, True),
+    ]
+
+    summary = runner.summarise_generation(lines)
+
+    assert (summary["correct_refusal"], summary["near_refusal"]) == (1, 2)
+    assert (summary["missed_refusal"], summary["answered"]) == (1, 2)
+    assert summary["answered_with_refusal_wording"] == 1

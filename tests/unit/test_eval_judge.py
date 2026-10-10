@@ -62,16 +62,67 @@ def test_refusal_outcome_uses_the_exact_sentence(
     )
 
 
-def test_a_paraphrased_refusal_is_not_a_refusal_but_is_flagged() -> None:
+def test_a_paraphrased_refusal_is_its_own_outcome_not_a_correct_refusal() -> None:
     result = refusal_check(
         _rec(answerable=False, answer="I cannot answer this from the documents.")
     )
 
     assert result == {
         "refused": False,
-        "outcome": "missed_refusal",
+        "outcome": "near_refusal",
         "near_refusal": True,
     }
+
+
+# The two paraphrased refusals of the M8 E3-gen run, cut to their refusing sentence.
+Q055 = (
+    "[4] The Nexus API exposes devices, readings and alerts over HTTPS.\n\n"
+    "There is no mention of payment methods in the provided documents."
+)
+Q058 = (
+    "[2][5] The cost of the Anthropic provider is not explicitly stated in the provided "
+    "documents. However, [2] mentions that every answer may use up to 16000 tokens."
+)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        Q055,
+        Q058,
+        "The documents do not mention a cloud region.",
+        "That isn't covered: no information about pricing is given in the sources.",
+        "I'm unable to determine that from the context.",
+        "This is not in the provided documents.",
+    ],
+)
+def test_paraphrased_refusals_on_unanswerables_are_near_refusals(answer: str) -> None:
+    assert refusal_check(_rec(answerable=False, answer=answer))["outcome"] == (
+        "near_refusal"
+    )
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Readings are kept for ninety days [1].",
+        "Nothing is stored on the hub [2].",
+        "Exports are not stated to expire; they last 7 days [3].",
+        "The README does not mention it, but ADR-0007 says so [1].",
+    ],
+)
+def test_ordinary_answers_are_not_near_refusals(answer: str) -> None:
+    assert refusal_check(_rec(answerable=False, answer=answer))["outcome"] == (
+        "missed_refusal"
+    )
+
+
+def test_refusal_wording_in_an_answer_to_an_answerable_question_is_flagged_only() -> (
+    None
+):
+    result = refusal_check(_rec(answer=Q058))
+
+    assert result == {"refused": False, "outcome": "answered", "near_refusal": True}
 
 
 # --- citations ----------------------------------------------------------------------
@@ -242,3 +293,12 @@ def test_a_citation_number_is_not_a_found_fact() -> None:
     rec = _rec(reference_answer="Two years.", answer="Hourly averages are kept [2].")
 
     assert fact_check(rec)["share"] == 0.0
+
+
+def test_the_near_refusal_check_is_linear_on_hostile_output() -> None:
+    import time
+
+    for text in ("not stated " * 40_000, "no mention" * 40_000, "documents " * 50_000):
+        start = time.perf_counter()
+        refusal_check(_rec(answerable=False, answer=text))
+        assert time.perf_counter() - start < 1.0

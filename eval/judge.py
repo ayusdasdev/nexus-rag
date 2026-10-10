@@ -24,10 +24,20 @@ JUDGE_SAMPLE_SEED = 20261010
 JUDGE_SAMPLE_SIZE = 20
 _NAME = re.compile(r"[a-z_]{1,64}")
 _SLOT = re.compile(r"\{\{(question|reference|sources|answer)\}\}")
-# Phrases a paraphrased refusal tends to use; flagged, never counted as a refusal.
+# Phrases a paraphrased refusal tends to use (M8 E3-gen: q055 "no mention of ... in the
+# provided documents", q058 "not explicitly stated in the provided documents"). On an
+# unanswerable question it is a near_refusal, never a correct one. Bounded, so linear.
+_SOURCES = (
+    r"(?:the )?(?:provided |given |retrieved )?(?:documents?|sources?|context|texts?)"
+)
 _NEAR_REFUSAL = re.compile(
-    r"\b(can ?not|can't|unable to|not able to) (answer|find)|"
-    r"\b(not|no information) (in|from) the (provided )?(documents|sources|context)",
+    r"\b(?:can ?not|can't|unable to|not able to) (?:answer|find|determine)|"
+    rf"\b(?:not|no information) (?:in|from) {_SOURCES}\b|"
+    r"\b(?:no (?:mention|information|details?)|nothing|not (?:explicitly )?"
+    r"(?:stated|mentioned|specified|provided|given|found|covered|included))\b"
+    rf"[^.\n]{{0,80}}?\b(?:in|from|by) {_SOURCES}\b|"
+    rf"\b{_SOURCES} (?:do|does)(?:n't| not) (?:say|mention|specify|state|contain|"
+    r"include|cover)\b",
     re.IGNORECASE,
 )
 
@@ -54,11 +64,14 @@ def _ws(text: str) -> str:
 
 def refusal_check(rec: AnswerRecord) -> dict[str, Any]:
     refused = rec.answer.strip() == REFUSAL
-    if rec.answerable:
-        outcome = "false_refusal" if refused else "answered"
-    else:
-        outcome = "correct_refusal" if refused else "missed_refusal"
     near = not refused and bool(_NEAR_REFUSAL.search(rec.answer))
+    if rec.answerable:
+        # Refusal wording in an answer is flagged only: it still answered.
+        outcome = "false_refusal" if refused else "answered"
+    elif refused:
+        outcome = "correct_refusal"
+    else:
+        outcome = "near_refusal" if near else "missed_refusal"
     return {"refused": refused, "outcome": outcome, "near_refusal": near}
 
 

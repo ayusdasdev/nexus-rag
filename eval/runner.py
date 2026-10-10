@@ -207,8 +207,10 @@ def summarise_generation(lines: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "correct_refusal": outcomes["correct_refusal"],
         "missed_refusal": outcomes["missed_refusal"],
         "false_refusal": outcomes["false_refusal"],
-        "near_refusal": sum(
-            1 for x in checked if x["checks"]["refusal"]["near_refusal"]
+        # Paraphrased refusals of unanswerables: neither correct nor a plain miss.
+        "near_refusal": outcomes["near_refusal"],
+        "answered_with_refusal_wording": sum(
+            1 for x in answered if x["checks"]["refusal"]["near_refusal"]
         ),
         "citations": {"valid": valid, "invalid": invalid},
         "answered_without_citation": sum(
