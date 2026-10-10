@@ -18,7 +18,9 @@ import json
 import os
 import stat
 import sys
+import tempfile
 import time
+import uuid
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any, TextIO
@@ -75,18 +77,48 @@ def check_transport_is_safe(api_url: str) -> None:
     )
 
 
+def _private_parent(parent: Path) -> None:
+    """Create the directory 0700, or check an existing one is safe to hold a token in.
+    An existing directory is never chmodded (it may be $HOME, or /tmp)."""
+    if not parent.exists():
+        parent.mkdir(parents=True, mode=0o700)
+        os.chmod(parent, 0o700)
+        return
+    info = parent.stat()
+    if info.st_mode & 0o022:
+        raise CliError(
+            f"{parent} is writable by other users; keep the config somewhere private"
+        )
+    if info.st_uid != os.getuid():
+        raise CliError(
+            f"{parent} belongs to another user; keep the config somewhere private"
+        )
+
+
 def save_config(path: Path, config: dict[str, Any]) -> None:
-    """Write atomically, mode 0600, in a 0700 directory."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
-    temporary = path.with_name(path.name + ".tmp")
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    """Write atomically, mode 0600: a unique temp file (O_EXCL, so a planted symlink can't
+    redirect it), fully written and fsynced, then renamed over the config."""
     try:
-        os.fchmod(fd, 0o600)
-        os.write(fd, json.dumps(config).encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.replace(temporary, path)
+        _private_parent(path.parent)
+        fd, temporary = tempfile.mkstemp(
+            dir=path.parent, prefix=".nexus-", suffix=".tmp"
+        )
+        try:
+            data = memoryview(json.dumps(config).encode("utf-8"))
+            while data:
+                data = data[os.write(fd, data) :]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            os.replace(temporary, path)
+        except OSError:
+            os.unlink(temporary)
+            raise
+    except OSError as exc:
+        raise CliError(
+            f"can't write {path}: {exc.strerror or type(exc).__name__}"
+        ) from exc
 
 
 def load_config(path: Path) -> dict[str, Any] | None:
@@ -94,10 +126,33 @@ def load_config(path: Path) -> dict[str, Any] | None:
         return None
     if stat.S_IMODE(path.stat().st_mode) & 0o077:
         raise CliError(f"{path} is readable by other users; run `chmod 600 {path}`")
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise CliError(
+            f"{path} is not a readable nexus config; run `nexus login`"
+        ) from exc
     if not isinstance(data, dict):
         raise CliError(f"{path} is not a nexus config")
     return data
+
+
+# Control characters (except newline and tab), DEL and C1: what terminal escape sequences
+# are made of. Everything shown to the user passes through here (M7 review, MEDIUM-4).
+_CONTROL: dict[int, None] = {
+    c: None for c in [*range(9), *range(11, 32), *range(0x7F, 0xA0)]
+}
+
+
+def sanitize(text: str) -> str:
+    return text.translate(_CONTROL)
+
+
+def _conversation_id(value: str) -> str:
+    try:
+        return str(uuid.UUID(value))
+    except ValueError as exc:
+        raise CliError("--conversation must be a conversation id (a UUID)") from exc
 
 
 def _problem_message(response: httpx.Response) -> str:
@@ -138,6 +193,8 @@ class Session:
             headers=headers,
             transport=self.transport,
             follow_redirects=False,
+            # No proxy, netrc or certificate overrides from the environment for the token.
+            trust_env=False,
             timeout=httpx.Timeout(30.0, read=600.0),
         )
 
@@ -146,7 +203,7 @@ class Session:
 
     def authed(self) -> httpx.Client:
         config = load_config(self.config_path)
-        if not config or not config.get("token"):
+        if not config or not config.get("token") or not config.get("api_url"):
             raise CliError("not logged in: run `nexus login` first")
         issued_for = str(config["api_url"])
         if self.requested_url and self.requested_url.rstrip("/") != issued_for.rstrip(
@@ -160,12 +217,16 @@ class Session:
         return self._client(issued_for, str(config["token"]))
 
     def print(self, text: str = "", end: str = "\n") -> None:
-        self.out.write(text + end)
+        self.out.write(sanitize(text) + end)
         self.out.flush()
 
 
 def _check(response: httpx.Response) -> httpx.Response:
-    if response.status_code >= 400:
+    if response.is_redirect:
+        raise CliError(
+            "the API answered with a redirect; not followed (check --api-url)"
+        )
+    if not response.is_success:
         raise CliError(_problem_message(response))
     return response
 
@@ -191,6 +252,8 @@ def _pages(
 def cmd_login(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
     api_url = s.requested_url or DEFAULT_API_URL
     check_transport_is_safe(api_url)
+    # Say where the password is about to go before asking for it.
+    s.print(f"Logging in to {api_url} as {args.email}")
     if args.password_stdin:
         password = stdin.readline().rstrip("\n")
     else:
@@ -266,7 +329,7 @@ def cmd_search(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
 
 def cmd_ask(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
     url = (
-        f"/v1/conversations/{args.conversation}/messages"
+        f"/v1/conversations/{_conversation_id(args.conversation)}/messages"
         if args.conversation
         else "/v1/chat"
     )
@@ -275,9 +338,9 @@ def cmd_ask(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
         s.authed() as client,
         client.stream("POST", url, json={"question": args.question}) as r,
     ):
-        if r.status_code >= 400:
+        if not r.is_success:
             r.read()
-            raise CliError(_problem_message(r))
+            _check(r)
         for event, data in parse_sse(r.iter_lines()):
             if event == "sources":
                 sources = data["sources"]
@@ -304,7 +367,9 @@ def cmd_history(s: Session, args: argparse.Namespace, stdin: TextIO) -> int:
     with s.authed() as client:
         if args.conversation:
             for message in _pages(
-                client, f"/v1/conversations/{args.conversation}", "messages"
+                client,
+                f"/v1/conversations/{_conversation_id(args.conversation)}",
+                "messages",
             ):
                 s.print(f"{message['role']}: {message['content']}")
         else:
@@ -381,7 +446,12 @@ def main(
         code: int = args.run(session, args, stdin)
         return code
     except CliError as exc:
-        stderr.write(f"nexus: {exc}\n")
+        stderr.write(f"nexus: {sanitize(str(exc))}\n")
+        return 1
+    except (KeyError, TypeError, ValueError) as exc:
+        stderr.write(
+            f"nexus: unexpected response from the API ({type(exc).__name__})\n"
+        )
         return 1
     except httpx.HTTPError as exc:
         # The exception type only: messages can include URLs, never the token, but stay terse.

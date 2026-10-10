@@ -501,3 +501,203 @@ def test_search_previews_stay_on_one_line(tmp_path: Path) -> None:
     _, out, _ = _run(tmp_path, server, "search", "hub")
 
     assert "   Widget. A sensor. Hub. The gateway." in out.splitlines()
+
+
+# --- M7 security review: config file safety (MEDIUM-3) -------------------------------
+
+
+def test_a_new_config_directory_is_created_0700(tmp_path: Path) -> None:
+    path = tmp_path / "fresh" / "config.json"
+
+    cli.save_config(path, {"api_url": API, "token": TOKEN})
+
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+def test_an_existing_directory_is_never_chmodded(tmp_path: Path) -> None:
+    home_like = tmp_path / "home"
+    home_like.mkdir(mode=0o755)
+    os.chmod(home_like, 0o755)
+
+    cli.save_config(home_like / "config.json", {"api_url": API, "token": TOKEN})
+
+    assert stat.S_IMODE(home_like.stat().st_mode) == 0o755
+    assert stat.S_IMODE((home_like / "config.json").stat().st_mode) == 0o600
+
+
+def test_a_directory_others_can_write_to_is_refused(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    os.chmod(shared, 0o777)
+
+    with pytest.raises(cli.CliError, match="writable by other users"):
+        cli.save_config(shared / "config.json", {"api_url": API, "token": TOKEN})
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o777
+    assert list(shared.iterdir()) == []
+
+
+def test_a_planted_symlink_at_the_old_temp_name_is_not_followed(tmp_path: Path) -> None:
+    victim = tmp_path / "victim.txt"
+    victim.write_text("untouched")
+    os.chmod(victim, 0o644)
+    (tmp_path / "config.json.tmp").symlink_to(victim)
+
+    cli.save_config(tmp_path / "config.json", {"api_url": API, "token": TOKEN})
+
+    assert victim.read_text() == "untouched"
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o644
+
+
+def test_a_symlinked_config_is_replaced_not_written_through(tmp_path: Path) -> None:
+    victim = tmp_path / "victim.txt"
+    victim.write_text("untouched")
+    (tmp_path / "config.json").symlink_to(victim)
+
+    cli.save_config(tmp_path / "config.json", {"api_url": API, "token": TOKEN})
+
+    assert victim.read_text() == "untouched"
+    assert not (tmp_path / "config.json").is_symlink()
+
+
+def test_an_unwritable_config_path_is_a_clean_error(tmp_path: Path) -> None:
+    not_a_dir = tmp_path / "file"
+    not_a_dir.write_text("x")
+
+    with pytest.raises(cli.CliError):
+        cli.save_config(not_a_dir / "config.json", {"api_url": API, "token": TOKEN})
+
+
+# --- terminal escape sequences from the server (MEDIUM-4) ----------------------------
+
+ESC = "\x1b]0;pwned\x07\x1b[2J"
+
+
+def test_sanitize_strips_control_characters_but_keeps_newlines_and_tabs() -> None:
+    assert cli.sanitize(f"a{ESC}b\tc\nd\x9be\x7f") == "a]0;pwned[2Jb\tc\nde"
+
+
+def test_server_text_never_reaches_the_terminal_with_escape_sequences(
+    tmp_path: Path,
+) -> None:
+    server = Server(
+        {
+            ("GET", "/v1/documents"): _json(
+                {
+                    "items": [
+                        {"id": "d1", "filename": f"evil{ESC}.md", "status": "ready"}
+                    ],
+                    "next_cursor": None,
+                }
+            ),
+            ("POST", "/v1/chat"): _sse(
+                ("sources", {"sources": [{"number": 1, "heading_path": f"H{ESC}"}]}),
+                ("token", {"text": f"T{ESC}"}),
+                ("done", {"answer": f"A{ESC}", "refused": False, "external_links": []}),
+            ),
+        }
+    )
+
+    _, docs, _ = _run(tmp_path, server, "docs")
+    _, answer, _ = _run(tmp_path, server, "ask", "q")
+
+    assert "\x1b" not in docs + answer and "\x07" not in docs + answer
+    assert "evil" in docs and "A]0;pwned" in answer
+
+
+def test_an_error_detail_is_sanitized_too(tmp_path: Path) -> None:
+    problem = {"status": 404, "detail": f"nope{ESC}", "request_id": f"r{ESC}"}
+    server = Server({("GET", "/v1/documents"): _json(problem, status=404)})
+
+    _, _, err = _run(tmp_path, server, "docs")
+
+    assert "\x1b" not in err and "nope" in err
+
+
+# --- login target and environment (LOW-1) --------------------------------------------
+
+
+def test_login_names_the_server_before_asking_for_the_password(tmp_path: Path) -> None:
+    server = Server({("POST", "/v1/auth/login"): _json({"access_token": TOKEN})})
+
+    _, out, _ = _run(
+        tmp_path,
+        server,
+        "--api-url",
+        API,
+        "login",
+        "--email",
+        "me@example.com",
+        "--password-stdin",
+        stdin="pw-123456\n",
+        logged_in=False,
+    )
+
+    assert out.splitlines()[0] == f"Logging in to {API} as me@example.com"
+
+
+def test_the_api_client_ignores_proxy_and_netrc_settings_from_the_environment(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "config.json"
+    cli.save_config(config, {"api_url": API, "token": TOKEN})
+    args = cli._parser().parse_args(["--config", str(config), "docs"])
+    session = cli.Session(args, None, io.StringIO(), io.StringIO())
+
+    with session.authed() as client:
+        assert client.trust_env is False
+
+
+# --- clean errors instead of tracebacks (LOW-2) --------------------------------------
+
+
+def test_a_redirect_is_an_error_and_is_not_followed(tmp_path: Path) -> None:
+    server = Server(
+        {
+            ("GET", "/v1/documents"): lambda r: httpx.Response(
+                302, headers={"location": "https://elsewhere.example/"}
+            )
+        }
+    )
+
+    code, _, err = _run(tmp_path, server, "docs")
+
+    assert code == 1 and "redirect" in err
+    assert len(server.requests) == 1
+
+
+@pytest.mark.parametrize("content", ["not json", "[]", '{"token": "t"}'])
+def test_a_broken_config_is_a_clean_error(tmp_path: Path, content: str) -> None:
+    config = tmp_path / "config.json"
+    config.write_text(content)
+    os.chmod(config, 0o600)
+    out, err = io.StringIO(), io.StringIO()
+
+    code = cli.main(
+        ["--config", str(config), "docs"],
+        transport=httpx.MockTransport(Server({})),
+        stdin=io.StringIO(),
+        stdout=out,
+        stderr=err,
+    )
+
+    assert code == 1
+    assert "Traceback" not in err.getvalue() and err.getvalue().startswith("nexus: ")
+
+
+def test_a_malformed_stream_event_is_a_clean_error(tmp_path: Path) -> None:
+    server = Server({("POST", "/v1/chat"): _sse(("sources", {"unexpected": True}))})
+
+    code, _, err = _run(tmp_path, server, "ask", "q")
+
+    assert code == 1 and err.startswith("nexus: ")
+
+
+def test_a_conversation_id_must_be_a_uuid(tmp_path: Path) -> None:
+    server = Server({})
+
+    code, _, err = _run(
+        tmp_path, server, "ask", "q", "--conversation", "../../v1/documents"
+    )
+
+    assert code == 1 and "conversation" in err
+    assert server.requests == []
