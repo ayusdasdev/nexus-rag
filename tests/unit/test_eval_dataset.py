@@ -6,6 +6,8 @@ from collections import Counter
 from eval.dataset import DATASETS, load_questions, make_split
 
 SPLIT = json.loads((DATASETS / "v1.split.json").read_text())
+# sha256 of v1's questions, spans and split, pinned at 3c488d5. Never update it: make v2.
+V1_DIGEST = "97e372bb19ff20a11121c9ead3ef6e1c9ffc92317912a5b32970a0d94a39029b"
 
 
 def test_v1_has_the_approved_60_questions_with_unique_ids() -> None:
@@ -58,3 +60,20 @@ def test_every_type_is_in_both_splits_at_about_20_percent() -> None:
     }
     assert all(dev[t] > 0 for t in held)
     assert len(SPLIT["holdout"]) == 12
+
+
+def test_v1_is_final_no_question_span_or_split_changes() -> None:
+    # Your rule: any change is a new dataset version (v2). wording_origin is metadata.
+    import hashlib
+
+    content = [
+        {k: q[k] for k in ("id", "type", "answerable", "question", "gold", "gold_mode")}
+        for q in load_questions()
+    ]
+    digest = hashlib.sha256(
+        json.dumps(
+            [content, SPLIT["seed"], SPLIT["dev"], SPLIT["holdout"]], sort_keys=True
+        ).encode()
+    ).hexdigest()
+
+    assert digest == V1_DIGEST
