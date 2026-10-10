@@ -97,6 +97,15 @@ def test_an_answer_is_captured_with_kept_and_dropped_citations() -> None:
     assert answer["raw_text"] == "Ninety days [1][9]."
 
 
+def test_the_apps_malformed_citation_report_is_captured_and_checked(
+    tmp_path: Path,
+) -> None:
+    answer = _answer(FakeLLM(["[M6] Ninety days [1]and"]), Q)
+
+    assert answer["malformed"] == ["[M6]", "[1]and"]
+    assert answer["text"] == "[M6] Ninety days [1] and"
+
+
 def test_no_sources_is_the_refusal_with_no_llm_call() -> None:
     llm = FakeLLM(["never"])
     answer = _answer(llm, U, items=0)
@@ -139,6 +148,7 @@ def test_result_lines_carry_the_deterministic_checks(tmp_path: Path) -> None:
         "invalid": 0,
         "validity": 1.0,
         "cites_gold": True,
+        "malformed": [],
     }
     assert checks["facts"]["share"] == 1.0
     summary = json.loads((tmp_path / "summary.json").read_text())
@@ -193,3 +203,11 @@ def test_the_summary_counts_near_refusals_apart_from_correct_and_missed_ones() -
     assert (summary["correct_refusal"], summary["near_refusal"]) == (1, 2)
     assert (summary["missed_refusal"], summary["answered"]) == (1, 2)
     assert summary["answered_with_refusal_wording"] == 1
+
+
+def test_the_summary_counts_answers_with_malformed_citations() -> None:
+    lines = [_scored("answered", False, True) for _ in range(3)]
+    lines[0]["checks"]["citations"]["malformed"] = ["[M6]", "[3]RIGHT"]
+    lines[1]["checks"]["citations"]["malformed"] = []
+
+    assert runner.summarise_generation(lines)["answers_with_malformed_citations"] == 1

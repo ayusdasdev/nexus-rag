@@ -47,6 +47,7 @@ def make_answerer(llm: LLMProvider, settings: Settings) -> AnswerFn:
             "raw_text": "",
             "cited": [],
             "dropped": [],
+            "malformed": [],
             "refused": None,
             "sources": [],
             "external_links": [],
@@ -71,6 +72,7 @@ def make_answerer(llm: LLMProvider, settings: Settings) -> AnswerFn:
             elif event.event == "citations":
                 out["cited"] = [c["number"] for c in event.data["citations"]]
                 out["dropped"] = list(event.data["dropped"])
+                out["malformed"] = list(event.data["malformed"])
             elif event.event == "done":
                 out["text"] = event.data["answer"]
                 out["refused"] = event.data["refused"]

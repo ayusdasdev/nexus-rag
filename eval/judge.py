@@ -18,6 +18,7 @@ from typing import Any
 
 from app.providers.llm import ChatMessage, LLMError, LLMProvider
 from app.services.chat import REFUSAL
+from app.services.generation import find_malformed_citations
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 JUDGE_SAMPLE_SEED = 20261010
@@ -53,6 +54,8 @@ class AnswerRecord:
     cited: list[int]
     dropped: list[int]
     sources: list[str]
+    # The model's output before the app's cleanup; malformed citations are read from it.
+    raw_answer: str = ""
 
 
 def _ws(text: str) -> str:
@@ -89,6 +92,8 @@ def citation_check(rec: AnswerRecord) -> dict[str, Any]:
         "invalid": invalid,
         "validity": valid / (valid + invalid) if valid + invalid else None,
         "cites_gold": cites_gold,
+        # [pymupdf4llm], [M6], [3]RIGHT-09: brackets the [N] counts above can't see.
+        "malformed": find_malformed_citations(rec.raw_answer or rec.answer),
     }
 
 

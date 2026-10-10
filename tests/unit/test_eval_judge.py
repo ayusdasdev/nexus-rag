@@ -138,7 +138,22 @@ def test_citation_validity_counts_dropped_numbers_and_gold_support() -> None:
         "invalid": 1,
         "validity": pytest.approx(2 / 3),
         "cites_gold": True,
+        "malformed": [],
     }
+
+
+def test_citation_check_lists_brackets_no_number_check_can_see() -> None:
+    # Read from the raw model output, as the app's citations event reports them.
+    rec = _rec(
+        answer="[pymupdf4llm] is used [1]. Document [1] RIGHT-09.",
+        raw_answer="[pymupdf4llm] is used [1]. Document [1]RIGHT-09.",
+    )
+
+    assert citation_check(rec)["malformed"] == ["[pymupdf4llm]", "[1]RIGHT-09"]
+
+
+def test_without_raw_output_the_final_answer_is_read() -> None:
+    assert citation_check(_rec(answer="[M6] Ninety days [1]."))["malformed"] == ["[M6]"]
 
 
 def test_no_citations_and_unanswerables_give_none_not_zero() -> None:

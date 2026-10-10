@@ -183,6 +183,7 @@ def _checks(
             cited=answer["cited"],
             dropped=answer["dropped"],
             sources=answer["sources"],
+            raw_answer=answer.get("raw_text", ""),
         )
     )
 
@@ -213,6 +214,10 @@ def summarise_generation(lines: Sequence[dict[str, Any]]) -> dict[str, Any]:
             1 for x in answered if x["checks"]["refusal"]["near_refusal"]
         ),
         "citations": {"valid": valid, "invalid": invalid},
+        # Lines scored before malformed citations were checked have no such key.
+        "answers_with_malformed_citations": sum(
+            1 for x in checked if x["checks"]["citations"].get("malformed")
+        ),
         "answered_without_citation": sum(
             1 for x in answered if not x["checks"]["citations"]["valid"]
         ),
