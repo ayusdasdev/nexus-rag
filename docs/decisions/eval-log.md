@@ -54,3 +54,28 @@ Recall@10 per type (fully covered / n):
 - Duplicated text: in 2-4 questions per run the first hit is in a non-gold document that
   quotes the same text (cli-demo.md, retrieval- and generation-observations.md; q001, q022,
   q044, q049). Span matching counts these as hits, by the dataset's definition.
+
+## E3: hybrid + rerank (written 2026-10-10, before running)
+
+Config: mode hybrid, rerank on (bge-reranker-base, at most 50 fused candidates scored),
+candidates 40, limit 10, expand none. Only `rerank` differs from E2.
+
+Mechanism: the cross-encoder reads question and chunk together, so it can see paraphrases
+that neither BM25 nor the bi-encoder matched, but it only reorders the fused pool. A gold
+chunk outside the top 50 fused candidates cannot be recovered.
+
+- **Overall.** Hypothesis: Recall@10 at least E2's 34/41, and the largest gain at the top:
+  MRR above E2's 0.628 and Recall@1 above 17/41.
+- **Paraphrase misses (E2 had none of these in the top 10).** Predictions, low confidence:
+  - q031 (fake source number): **recovered** into the top 10. "dropped" and "citation" are
+    the concept the question describes in other words.
+  - q024 (file vanishes after re-upload): **recovered**. The ADR-0004 chunk says almost
+    exactly this, only with "re-processing" and "ready".
+  - q029 (first M5 answer never arrived): **not recovered**. The gold chunk is one of many
+    near-identical M5/M6 timing notes in generation-observations.md; the reranker is likely
+    to prefer another of them.
+  So: 2 of the 3 recovered; paraphrase Recall@10 7-8/10 (E2 6/10).
+- **Exact-token.** Hypothesis: Recall@10 stays 7/7 (all were already in E2's top 10);
+  Recall@1 stays at 6/7 or drops by one, since cross-encoders can underweight rare ids
+  (WID-0042, RIGHT-07, flags) that BM25 ranked first.
+- **Cost.** Estimate ~38 s per search (up to 50 pairs at ~0.77 s), ~31 min for 48 questions.
