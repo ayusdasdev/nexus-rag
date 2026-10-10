@@ -259,6 +259,15 @@ dependency).
 
 ## M8: Evaluation and tuning
 
+Your decisions (2026-10-10): corpus = docs/guide.pdf + this repo's ADRs and Markdown docs +
+sample_docs 01-05, frozen under eval/corpus/ (PROGRESS.md left out: it repeats the ADRs, so gold
+labels would be ambiguous). I draft candidate questions in-session; you approve every one before
+any metric runs. Judging: deterministic metrics on every answer (refusal accuracy, citation
+validity, reference-fact check) plus a one-call llama3.2:3b judge on a fixed 20-question sample,
+calibrated on 15 answers you grade; judge numbers reported as rough. Metrics: Recall@1/3/5/10,
+MRR, nDCG@10; generation runs only for E3 and the best config (and the final held-out run).
+Free setup only; ask before any run over 30 minutes.
+
 - [?] 8.1 Corpus choice (15-25 docs) and an eval tenant. You choose.
 - [?] 8.2 `eval/tools/gen_candidates.py` and `eval/tools/review.py`. I draft candidates; **you review
   and approve every question** (keep/edit/reject), rewrite about a third, and add exact-token,
