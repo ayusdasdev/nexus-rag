@@ -259,6 +259,10 @@ def _permissive_rate_limits(request: pytest.FixtureRequest) -> Iterator[None]:
         async def take(self, *args: object, **kwargs: object) -> Decision:
             return Decision(allowed=True, remaining=1.0, retry_after=0.0)
 
+        async def refund(self, *args: object, **kwargs: object) -> None:
+            # A 422 gives its tokens back (639b968); nothing was taken here.
+            return None
+
     app.dependency_overrides[get_rate_limit_store] = lambda: _AllowAll()
     try:
         yield
