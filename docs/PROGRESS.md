@@ -239,6 +239,21 @@ dependency).
   refused if loose, bound to its API URL, https or loopback only, never printed.
   Real run in `docs/cli-demo.md`: everything works; `ask` correct but uncited (162.86 s cold).
 
+- [x] security-reviewer subagent on `42f06f0..89187b2`: no critical; 2 high, 5 medium, all fixed with
+  tests first (your decisions for the design ones):
+  - HIGH-1: signup/login unlimited, and open signup minted fresh buckets -> per-IP (+
+    `TRUSTED_PROXIES`), per-email login and global signup budgets, fail closed (`ec01f5c`).
+  - HIGH-2: credential fields unbounded; a >72-byte password was a 500 (bcrypt), reproduced ->
+    72-byte limit, extra=forbid (`4da7398`). Unversioned `/auth/*` removed (`1def94e`).
+  - MEDIUM: uploads in the cheap bucket -> own class 10/1 per min (`315f962`); no Redis
+    timeouts -> 0.5 s, malformed replies handled (`a840235`); CLI config chmod/symlink
+    (reproduced), terminal escapes, login target, redirects/tracebacks (`ec9f507`).
+  - LOW fixed: SQL parameters in error text/logs -> hide_parameters (`bccf679`).
+  - [?] Open decision (ADR-0010): a 422 spends a rate-limit token (measured). Keep, or check
+    limits only after validation?
+  - Accepted, in ADR-0010 (`0097493`): half-share user buckets can drain a tenant; cursor key
+    tied to the JWT secret; logout doesn't revoke; public `/docs`.
+
 ## M8: Evaluation and tuning
 
 - [?] 8.1 Corpus choice (15-25 docs) and an eval tenant. You choose.
