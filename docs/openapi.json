@@ -1452,7 +1452,7 @@
     },
     "/v1/auth/login": {
       "post": {
-        "description": "Log in with email and password.",
+        "description": "Log in with email and password.\n\nRate-limited per client IP and per email (429), before the password is checked.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -1494,6 +1494,26 @@
               }
             },
             "description": "Invalid input, including any tenant_id field and invalid cursors"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limit exceeded; see Retry-After"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A dependency (vector store, queue, LLM, rate limiter) is unavailable"
           }
         },
         "summary": "Login",
@@ -1551,7 +1571,7 @@
     },
     "/v1/auth/signup": {
       "post": {
-        "description": "Create a new tenant and its first (admin) user, and log them in.",
+        "description": "Create a new tenant and its first (admin) user, and log them in.\n\nRate-limited per client IP and by a global signup budget (429), before any hashing.",
         "operationId": "signup",
         "requestBody": {
           "content": {
@@ -1593,6 +1613,26 @@
               }
             },
             "description": "Invalid input, including any tenant_id field and invalid cursors"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limit exceeded; see Retry-After"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A dependency (vector store, queue, LLM, rate limiter) is unavailable"
           }
         },
         "summary": "Signup",

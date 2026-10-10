@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.deps import CurrentUser, get_current_user
-from app.api.rate_limit import limit_default
+from app.api.rate_limit import enforce_auth_limit, get_rate_limit_store, limit_default
+from app.core.config import Settings, get_settings
+from app.repositories.rate_limit_store import RedisRateLimitStore
 from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse, UserProfile
 from app.services.auth_service import (
     AuthService,
@@ -18,9 +20,16 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 )
 async def signup(
     body: SignupRequest,
+    request: Request,
     service: AuthService = Depends(get_auth_service),  # noqa: B008 - FastAPI DI pattern
+    settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
+    store: RedisRateLimitStore = Depends(get_rate_limit_store),  # noqa: B008
 ) -> TokenResponse:
-    """Create a new tenant and its first (admin) user, and log them in."""
+    """Create a new tenant and its first (admin) user, and log them in.
+
+    Rate-limited per client IP and by a global signup budget (429), before any hashing.
+    """
+    await enforce_auth_limit("signup", request, settings, store)
     try:
         _tenant, user, token = await service.signup(
             body.tenant_name, body.email, body.password
@@ -45,9 +54,16 @@ async def signup(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     body: LoginRequest,
+    request: Request,
     service: AuthService = Depends(get_auth_service),  # noqa: B008 - FastAPI DI pattern
+    settings: Settings = Depends(get_settings),  # noqa: B008 - FastAPI DI pattern
+    store: RedisRateLimitStore = Depends(get_rate_limit_store),  # noqa: B008
 ) -> TokenResponse:
-    """Log in with email and password."""
+    """Log in with email and password.
+
+    Rate-limited per client IP and per email (429), before the password is checked.
+    """
+    await enforce_auth_limit("login", request, settings, store, email=body.email)
     try:
         user, token = await service.login(body.email, body.password)
     except InvalidCredentials as exc:

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, IPvAnyNetwork, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_JWT_SECRET = "dev-insecure-secret-change-me-before-deploying"
@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     rate_limit_search_refill_per_second: float = Field(default=0.2, ge=0)
     rate_limit_default_capacity: float = Field(default=120, gt=0)
     rate_limit_default_refill_per_second: float = Field(default=2.0, ge=0)
+    # Unauthenticated routes (M7 review, HIGH-1): per client IP, per login email, and a
+    # global signup budget. X-Forwarded-For counts only from these proxies (CIDRs).
+    trusted_proxies: list[IPvAnyNetwork] = Field(default_factory=list)
+    rate_limit_signup_ip_capacity: float = Field(default=3, gt=0)
+    rate_limit_signup_ip_refill_per_second: float = Field(default=3 / 3600, ge=0)
+    rate_limit_signup_global_capacity: float = Field(default=30, gt=0)
+    rate_limit_signup_global_refill_per_second: float = Field(default=30 / 3600, ge=0)
+    rate_limit_login_ip_capacity: float = Field(default=20, gt=0)
+    rate_limit_login_ip_refill_per_second: float = Field(default=0.1, ge=0)
+    rate_limit_login_email_capacity: float = Field(default=5, gt=0)
+    rate_limit_login_email_refill_per_second: float = Field(default=1 / 60, ge=0)
     llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
 
     @model_validator(mode="after")

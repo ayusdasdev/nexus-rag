@@ -32,8 +32,8 @@ _DESCRIPTIONS = {
 
 # Codes each operation can return beyond the common 401/422/429 (docs/api-audit.md).
 _SPECIFIC: dict[str, tuple[str, ...]] = {
-    "signup": ("409",),
-    "login": ("401",),
+    "signup": ("409", "429", "503"),
+    "login": ("401", "429", "503"),
     "uploadDocument": ("413", "415", "503"),
     "getDocument": ("404",),
     "deleteDocument": ("404", "503"),
