@@ -327,10 +327,15 @@ Free setup only; ask before any run over 30 minutes.
 - [x] 8.6g Calibration ready (`65942dd`, `43ca814` typing): the 15 come from the fixed 20-question
   judge sample with no verdict needed: q007 q008 q012 q015 q018 q021 q022 q024 q027 q030 q034
   q036 q044 q046 q056. You grade; the judge isn't run until you say "run the judge".
-- [ ] 8.6h Waiting for your review of the diff (it changes `/v1/chat` output), then 4 commits:
-  leftover-tag stripping; the `malformed` citations report plus a space after fused citations;
-  the eval citation check reading `malformed`; `eval/tools/rescore.py` and the E3-gen
-  re-score (`rescore.json`). `make lint` pass, `make test` 613 passed on that tree.
+- [x] 8.6h Approved and committed, `make lint` and `make test` before each: leftover-tag stripping
+  (`77b8d81`, 590 passed), `malformed` citations report + fused-citation space (`38856c1`, 605),
+  eval citation check reading `malformed` (`2fd0d15`, 609), `eval/tools/rescore.py` + E3-gen
+  `rescore.json` + eval-log entry (`e7c0669`, 613). Then `make test-int` alone, Ollama stopped:
+  354 passed. Re-score: near-refusals 2 (q055, q058), missed 1 (q053), correct 4/7 unchanged;
+  4 answers with malformed citations. q017's reference problem left alone (would be v2) and
+  logged as a known fact-check limitation.
+- [ ] 8.6i You hand-grade the 15 (`uv run python -m eval.tools.calibrate --run E3-gen`). The
+  real judge runs only after you say "run the judge".
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
