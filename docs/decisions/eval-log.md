@@ -201,3 +201,44 @@ My own reading of correctness for the 41 answerable (rough, not the judge, not c
   pre-approved), q045.
 - Partial: q001, q006, q021, q027, q029, q034, q046, q047, q049.
 - Paraphrase is weakest (wrong: q024, q028, q031, q033), consistent with its retrieval.
+
+## E3-gen re-scored with the corrected checks (no regeneration)
+
+Date: 2026-10-10. Same 48 stored answers (`eval/runs/E3-gen/results.jsonl`, unchanged);
+`eval/tools/rescore.py` wrote `rescore.json` next to them. No model was loaded.
+Two re-scorings: **checks fixed** (stored final text, current checks: the effect of the check
+fixes alone) and **+ recleaned** (the stored raw output re-run through the app's new
+cleanup first).
+
+| | old (summary.json) | checks fixed | + recleaned |
+|---|---|---|---|
+| correct refusals (of 7) | 4 | 4 | 4 |
+| near-refusals (of 7) | not an outcome | 2 (q055, q058) | 2 |
+| missed refusals (of 7) | 3 | 1 (q053 "[6]") | 1 |
+| false refusals (of 41) | 1 (q061) | 1 | 1 |
+| answers with malformed citations | not checked | 4 | 4 |
+| numeric citations valid / invalid | 40 / 0 | 40 / 0 | 40 / 0 |
+| answered without citation | 6 | 6 | 6 |
+| answered citing gold | 15 | 15 | 15 |
+| facts: checkable / all found / mean share | 23 / 7 / 0.49 | 23 / 7 / 0.49 | 23 / 7 / 0.49 |
+
+- Malformed citations found: q005 `[pymupdf4llm]`, q014 `[3]RIGHT-09`, q015 `[M6]`,
+  q038 `[X-Accel-Buffering: no]`: exactly the four I found by reading, and no others.
+- Refusal wording inside an answer to an answerable question: 0 of 40.
+- Per type, only unanswerable (near 0 → 2, missed 3 → 1) and the malformed counts
+  (factoid 3, exact-token 1) changed.
+- The fact check didn't move: it already ignored facts the question states (`c8480ae`,
+  before the run).
+- **Known limitation of the fact check (left as is, decided 2026-10-10):** it scores every
+  number and identifier in the reference answer, including ones the question doesn't ask
+  about. q017 asks what happens to *search* when Redis is down; the reference also says chat
+  fails closed with 503, so a correct "search fails open" answer scores 0/1 on "503". Fixing
+  it means per-question fact lists or a changed reference, which would be dataset v2, so v1
+  keeps it and fact-share numbers on v1 carry this bias.
+- Recleaning changed the final text of 4 answers: q034 and q049 lose `<answer>` wrappers,
+  q050 loses `</p>`, q014 gets `[3] RIGHT-09`. q041's `<nexus readings export ...>` and q050's
+  leading `<pymupdf4llm (...` are not tags and stay; q033's `<history>` is a backtick quote of
+  a source and stays. None of the counts above depend on these text changes.
+- The near-refusal pattern was written from the two cases it now catches (n = 2), so it is
+  fitted to them; the tests add four other wordings and four negatives, but its precision on
+  new answers is unmeasured.
