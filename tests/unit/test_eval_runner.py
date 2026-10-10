@@ -236,3 +236,12 @@ def test_the_summary_reports_means_with_raw_counts_overall_and_per_type(
     assert summary["per_type"]["paraphrase"]["recall@3"]["full"] == 1
     assert summary["unanswerable_n"] == 1
     assert json.loads((tmp_path / "summary.json").read_text()) == summary
+
+
+def test_ids_narrow_a_split_and_cannot_reach_outside_it() -> None:
+    split = ["q001", "q003", "q007"]
+
+    assert runner.select_ids(split, "q007,q001") == ["q007", "q001"]
+    assert runner.select_ids(split, None) == split
+    with pytest.raises(SystemExit, match="not in the dev split"):
+        runner.select_ids(split, "q001,q002", split_name="dev")

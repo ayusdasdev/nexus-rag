@@ -102,6 +102,19 @@ def check_split_allowed(split: str, final_holdout: bool) -> None:
         )
 
 
+def select_ids(
+    split_ids: Sequence[str], ids: str | None, split_name: str = "dev"
+) -> list[str]:
+    """--ids narrows the chosen split (for smoke tests); an id outside it is refused."""
+    if ids is None:
+        return list(split_ids)
+    chosen = [i.strip() for i in ids.split(",") if i.strip()]
+    outside = [i for i in chosen if i not in set(split_ids)]
+    if outside:
+        raise SystemExit(f"{', '.join(outside)} not in the {split_name} split")
+    return chosen
+
+
 def git_info() -> tuple[str, bool]:
     sha = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -322,6 +335,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--set", dest="overrides", action="append", default=[])
     parser.add_argument("--dataset", default="v1")
     parser.add_argument("--generate", action="store_true", help="also generate answers")
+    parser.add_argument(
+        "--ids", help="comma-separated ids within the split (smoke tests)"
+    )
     args = parser.parse_args(argv)
     check_split_allowed(args.split, args.final_holdout)
     config = parse_overrides(args.overrides)
@@ -340,12 +356,13 @@ def main(argv: list[str] | None = None) -> int:
         "git_dirty": dirty,
         "generate": args.generate,
     }
+    ids = select_ids(split[args.split], args.ids, args.split)
     search, close = make_search(generate=args.generate)
 
     async def go() -> dict[str, Any]:
         try:
             return await run_questions(
-                questions, split[args.split], config, search, RUNS / args.tag, meta
+                questions, ids, config, search, RUNS / args.tag, meta
             )
         finally:
             await close()  # in the same event loop the DB engine was used in
