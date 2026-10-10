@@ -120,3 +120,38 @@ Hypotheses against measurement:
   question needing two chunks doesn't have.
 - With 7-17 questions per type, per-type moves of 1-2 questions are not evidence by themselves;
   the paraphrase gain (+4 at R@3) and multi-chunk MRR drop are the largest effects measured.
+
+## E3-gen: one generation run, E3 config, limit 6 (2026-10-10) - STOPPED at 21/48
+
+Config: hybrid + rerank, candidates 40, limit 6, llama3.2:3b on CPU via Ollama, answer
+deadline 420 s (Ollama read timeout 300 s). Files: eval/runs/E3-gen (partial_summary.json).
+
+- **Stopped by your memory rule**: available memory fell to 1,438 MB at 21/48. Ollama's
+  llama-server had grown to 6.4 GB RSS (the model loaded at 2.6 GB); the eval runner stayed at
+  0.57 GB. Stopped with SIGINT; all 21 lines intact; Ollama stopped; memory back to 8.6 GB.
+- **Wall clock vs work**: 12:09 to 14:20 wall-clock, but the answers' own timers add up to
+  ~45 min. A ~85 min gap appeared before answer 13 with no answer running; my inference (not
+  verified) is that the VM was paused, e.g. by host sleep.
+- Rerank cache worked: rerank 0.0 s per question; generation p50 131 s, max 230 s.
+- Done: 16 factoid + 5 paraphrase (ids sort by type). **Refusal accuracy is not measured**: none
+  of the 7 unanswerables ran.
+
+Deterministic checks on the 21 (measured):
+- Errors 0; answered 21; refusals 0 (none expected among these).
+- Citations: 19 valid, 0 invalid; 3 answers with no citation (q001, q015, q017); 10 of 21 cite a
+  source that contains a gold span.
+- Reference facts: 11 answers have a checkable fact; mean share 0.57, all facts found in 4.
+  Limitation seen: q017's reference names a 503 the question didn't ask about, so a right
+  answer scores 0.
+
+Format problems (counted by pattern, then read by me):
+- 16/21 answers start with a citation (`[2] According to ...`).
+- Non-numeric brackets the citation parser ignores, so "0 invalid" undercounts: q005
+  `[pymupdf4llm]`, q015 `[M6]`. Fused citation: q014 `[3]RIGHT-09`.
+- q021 dumped a raw markdown table and is cut mid-row (likely the 512-token cap).
+- q022's raw output echoed prompt tags; strip_prompt_scaffolding removed them.
+
+My own reading of correctness (rough, not the judge, not calibrated): 15 right, 4 partial
+(q001 omits the two-year part, q006 lists 3 of 6 stages, q021 table dump, q027 right conclusion
+from an unrelated quote), 2 wrong (q014 says the docs don't say; q024 gives a deletion reason
+instead of re-processing).

@@ -314,6 +314,9 @@ Free setup only; ask before any run over 30 minutes.
   refused --generate (an edit that didn't apply; fixed and covered, `dba1c22`). Then: rerank
   0.0 s (cached), answers 150-229 s; q053 (unanswerable) answered only "[6]", q001 uncited.
   Fact check fixed before the full run (`c8480ae`). Full 48-question dev run: started.
+- [~] 8.6d E3-gen **stopped at 21/48** by your memory rule (1,438 MB available; llama-server grew
+  to 6.4 GB). 16 factoid + 5 paraphrase done, all lines intact; refusal accuracy not yet
+  measured. Partial checks in eval-log.md. Waiting for your decision on resuming.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):

@@ -1,0 +1,184 @@
+{
+ "note": "PARTIAL: run stopped at 21/48 when available memory fell below 1.5 GB (your stop rule). Only factoid (16) and paraphrase (5) answered; no unanswerable, exact-token or multi-chunk yet. Retrieval metrics here use limit 6.",
+ "done_ids": [
+  "q001",
+  "q003",
+  "q004",
+  "q005",
+  "q006",
+  "q007",
+  "q008",
+  "q010",
+  "q012",
+  "q014",
+  "q015",
+  "q016",
+  "q017",
+  "q018",
+  "q019",
+  "q021",
+  "q022",
+  "q023",
+  "q024",
+  "q025",
+  "q027"
+ ],
+ "retrieval": {
+  "overall": {
+   "n": 21,
+   "recall@1": {
+    "mean": 0.6190476190476191,
+    "full": 13,
+    "n": 21
+   },
+   "recall@3": {
+    "mean": 0.8095238095238095,
+    "full": 17,
+    "n": 21
+   },
+   "recall@5": {
+    "mean": 0.9047619047619048,
+    "full": 19,
+    "n": 21
+   },
+   "recall@10": {
+    "mean": 0.9523809523809523,
+    "full": 20,
+    "n": 21
+   },
+   "mrr": 0.7333333333333334,
+   "ndcg@10": 0.7897713672541568
+  },
+  "per_type": {
+   "factoid": {
+    "n": 16,
+    "recall@1": {
+     "mean": 0.625,
+     "full": 10,
+     "n": 16
+    },
+    "recall@3": {
+     "mean": 0.75,
+     "full": 12,
+     "n": 16
+    },
+    "recall@5": {
+     "mean": 0.875,
+     "full": 14,
+     "n": 16
+    },
+    "recall@10": {
+     "mean": 0.9375,
+     "full": 15,
+     "n": 16
+    },
+    "mrr": 0.7229166666666667,
+    "ndcg@10": 0.7783918099228646
+   },
+   "paraphrase": {
+    "n": 5,
+    "recall@1": {
+     "mean": 0.6,
+     "full": 3,
+     "n": 5
+    },
+    "recall@3": {
+     "mean": 1.0,
+     "full": 5,
+     "n": 5
+    },
+    "recall@5": {
+     "mean": 1.0,
+     "full": 5,
+     "n": 5
+    },
+    "recall@10": {
+     "mean": 1.0,
+     "full": 5,
+     "n": 5
+    },
+    "mrr": 0.7666666666666667,
+    "ndcg@10": 0.8261859507142916
+   }
+  },
+  "unanswerable_n": 0,
+  "latency_ms": {
+   "p50": 130785.94131399586,
+   "p95": 202830.396638994
+  }
+ },
+ "generation": {
+  "n": 21,
+  "errors": {},
+  "answered": 21,
+  "correct_refusal": 0,
+  "missed_refusal": 0,
+  "false_refusal": 0,
+  "near_refusal": 0,
+  "citations": {
+   "valid": 19,
+   "invalid": 0
+  },
+  "answered_without_citation": 3,
+  "answered_citing_gold": 10,
+  "facts": {
+   "mean_share": 0.5681818181818182,
+   "all_found": 4,
+   "scorable": 11
+  },
+  "generate_ms": {
+   "p50": 130709.3490010011,
+   "max": 230009.94417499896
+  }
+ },
+ "generation_per_type": {
+  "factoid": {
+   "n": 16,
+   "errors": {},
+   "answered": 16,
+   "correct_refusal": 0,
+   "missed_refusal": 0,
+   "false_refusal": 0,
+   "near_refusal": 0,
+   "citations": {
+    "valid": 14,
+    "invalid": 0
+   },
+   "answered_without_citation": 3,
+   "answered_citing_gold": 7,
+   "facts": {
+    "mean_share": 0.575,
+    "all_found": 4,
+    "scorable": 10
+   },
+   "generate_ms": {
+    "p50": 130709.3490010011,
+    "max": 230009.94417499896
+   }
+  },
+  "paraphrase": {
+   "n": 5,
+   "errors": {},
+   "answered": 5,
+   "correct_refusal": 0,
+   "missed_refusal": 0,
+   "false_refusal": 0,
+   "near_refusal": 0,
+   "citations": {
+    "valid": 5,
+    "invalid": 0
+   },
+   "answered_without_citation": 0,
+   "answered_citing_gold": 3,
+   "facts": {
+    "mean_share": 0.5,
+    "all_found": 0,
+    "scorable": 1
+   },
+   "generate_ms": {
+    "p50": 133539.69786400557,
+    "max": 166544.5274329977
+   }
+  }
+ }
+}
