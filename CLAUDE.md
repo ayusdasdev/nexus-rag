@@ -19,6 +19,7 @@ tenant filter.
 Provider SDK imports outside app/providers/ are blocked by `.importlinter`.
 - Prompts live in app/prompts/*.md and are loaded at runtime via app/services/prompts.load_prompt;
 never inline a prompt in code. Retrieved text goes only inside <document> tags (ADR-0007).
+Eval-only prompts (the M8 judge) live in eval/prompts/*.md, loaded by eval/judge.py.
 - Chunk/point IDs are deterministic: uuid5(NAMESPACE, f"{document_id}:{chunk_index}").
 ## Conventions
 - Type hints everywhere; `mypy --strict` (see mypy.ini) must pass. Pydantic v2 for every
