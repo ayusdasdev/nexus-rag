@@ -310,6 +310,10 @@ Free setup only; ask before any run over 30 minutes.
 - [x] 8.6c `--generate` path (`5c0c062`): real answer pipeline per question, deterministic checks
   per line, generation counts in summary.json; Ollama only. FakeLLM tests. Approved next: smoke
   test (3 questions), then all 48 dev with E3 config + limit 6. Real judge NOT approved.
+- [x] Smoke test (`eval/runs/smoke-gen`): first try exited in 3.6 s, as `make_search` still
+  refused --generate (an edit that didn't apply; fixed and covered, `dba1c22`). Then: rerank
+  0.0 s (cached), answers 150-229 s; q053 (unanswerable) answered only "[6]", q001 uncited.
+  Fact check fixed before the full run (`c8480ae`). Full 48-question dev run: started.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
