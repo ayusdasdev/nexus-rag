@@ -12,7 +12,7 @@ from typing import Literal
 
 from app.core.config import Settings
 
-LimitClass = Literal["chat", "search", "default"]
+LimitClass = Literal["chat", "search", "upload", "default"]
 
 
 @dataclass(frozen=True)
@@ -89,6 +89,10 @@ def buckets_for(kind: LimitClass, settings: Settings) -> tuple[Bucket, Bucket]:
         "search": (
             settings.rate_limit_search_capacity,
             settings.rate_limit_search_refill_per_second,
+        ),
+        "upload": (
+            settings.rate_limit_upload_capacity,
+            settings.rate_limit_upload_refill_per_second,
         ),
         "default": (
             settings.rate_limit_default_capacity,

@@ -81,6 +81,7 @@ def rate_limited(kind: LimitClass) -> Callable[..., Awaitable[None]]:
 
 limit_chat = rate_limited("chat")
 limit_search = rate_limited("search")
+limit_upload = rate_limited("upload")
 limit_default = rate_limited("default")
 
 

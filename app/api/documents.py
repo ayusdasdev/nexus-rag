@@ -13,7 +13,7 @@ from fastapi import (
 
 from app.api.deps import CurrentUser, get_current_user, get_tenant_id
 from app.api.pagination import AFTER, index_key, page, time_cursor_key, time_key
-from app.api.rate_limit import limit_default
+from app.api.rate_limit import limit_default, limit_upload
 from app.core.config import get_settings
 from app.core.errors import TransientError
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
@@ -36,9 +36,7 @@ from app.services.document_service import (
 )
 from app.workers.queue import CeleryTaskQueue
 
-router = APIRouter(
-    prefix="/documents", tags=["documents"], dependencies=[Depends(limit_default)]
-)
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 def get_task_queue() -> TaskQueue:
@@ -75,6 +73,7 @@ def _to_response(document: DocumentRecord) -> DocumentResponse:
     "",
     response_model=DocumentResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(limit_upload)],
     summary="Upload a document for ingestion",
 )
 async def upload_document(
@@ -125,6 +124,7 @@ async def upload_document(
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
+    dependencies=[Depends(limit_default)],
     summary="Get a document's status",
 )
 async def get_document(
@@ -145,7 +145,12 @@ async def get_document(
 _LIMIT = Query(default=20, ge=1, le=100)
 
 
-@router.get("", response_model=DocumentPage, summary="List the tenant's documents")
+@router.get(
+    "",
+    response_model=DocumentPage,
+    dependencies=[Depends(limit_default)],
+    summary="List the tenant's documents",
+)
 async def list_documents(
     limit: int = _LIMIT,
     after: str | None = AFTER,
@@ -171,6 +176,7 @@ async def list_documents(
 @router.get(
     "/{document_id}/chunks",
     response_model=ChunkPage,
+    dependencies=[Depends(limit_default)],
     summary="List a document's chunks",
 )
 async def list_chunks(
@@ -216,6 +222,7 @@ async def list_chunks(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(limit_default)],
     summary="Delete a document, its chunks and its stored file",
 )
 async def delete_document(

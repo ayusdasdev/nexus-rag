@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     rate_limit_search_refill_per_second: float = Field(default=0.2, ge=0)
     rate_limit_default_capacity: float = Field(default=120, gt=0)
     rate_limit_default_refill_per_second: float = Field(default=2.0, ge=0)
+    # Uploads cost worker time (parse, chunk, embed), so they get their own bucket.
+    rate_limit_upload_capacity: float = Field(default=10, gt=0)
+    rate_limit_upload_refill_per_second: float = Field(default=1 / 60, ge=0)
     # Unauthenticated routes (M7 review, HIGH-1): per client IP, per login email, and a
     # global signup budget. X-Forwarded-For counts only from these proxies (CIDRs).
     trusted_proxies: list[IPvAnyNetwork] = Field(default_factory=list)

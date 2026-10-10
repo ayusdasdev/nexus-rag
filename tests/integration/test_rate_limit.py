@@ -242,3 +242,45 @@ async def test_conversation_messages_share_the_chat_bucket(
 
     assert response.status_code == 429
     assert uuid.UUID(conversation)
+
+
+# --- M7 review, MEDIUM-1: uploads have their own, smaller bucket ---------------------
+
+
+async def _upload(client: AsyncClient, caller: Caller) -> Response:
+    return await client.post(
+        "/v1/documents",
+        headers=caller.headers,
+        files={
+            "file": (
+                f"{uuid.uuid4().hex}.md",
+                f"# {uuid.uuid4()}".encode(),
+                "text/markdown",
+            )
+        },
+    )
+
+
+async def test_uploads_use_their_own_bucket(
+    client: AsyncClient, new_tenant: NewTenant, real_store: None
+) -> None:
+    caller = await new_tenant()
+    _settings(rate_limit_upload_capacity=2, rate_limit_upload_refill_per_second=0.01)
+    try:
+        first = await _upload(client, caller)
+        second = await _upload(client, caller)
+        listing = await client.get("/v1/documents", headers=caller.headers)
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert first.status_code in (200, 202)
+    # User bucket: 1 burst, 0.005/s, so 200 s for the next upload.
+    _assert_429(second, retry_after="200", limit="2")
+    assert listing.status_code == 200  # reads are still in the default bucket
+
+
+def test_upload_defaults_are_10_burst_then_1_per_minute() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.rate_limit_upload_capacity == 10
+    assert settings.rate_limit_upload_refill_per_second == pytest.approx(1 / 60)
