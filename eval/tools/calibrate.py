@@ -101,7 +101,7 @@ def agreement(human: Mapping[str, Grade], judge: Mapping[str, Grade]) -> dict[st
 
 
 def calibration_items(
-    questions: Sequence[Mapping[str, Any]],
+    questions: Sequence[dict[str, Any]],
     split: Mapping[str, Sequence[str]],
     lines: Sequence[Mapping[str, Any]],
     seed: int = 20261010,
@@ -112,8 +112,10 @@ def calibration_items(
 
     ids = calibration_ids(judge_sample(questions, split["dev"]), seed)
     by_q = {q["id"]: q for q in questions}
-    answers = {x["id"]: x.get("answer") for x in lines}
-    missing = [i for i in ids if not (answers.get(i) or {}).get("text")]
+    answers: dict[str, Mapping[str, Any]] = {
+        x["id"]: x["answer"] for x in lines if x.get("answer")
+    }
+    missing = [i for i in ids if not answers.get(i, {}).get("text")]
     if missing:
         raise SystemExit(f"the run has no answer for {missing}")
     return [
