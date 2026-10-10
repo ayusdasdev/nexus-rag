@@ -32,6 +32,21 @@ NewMember = Callable[[Caller], Awaitable[Caller]]
 QUESTION = {"question": "How long does charging take?"}
 
 
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
+async def _fresh_auth_buckets() -> AsyncIterator[None]:
+    # These tests sign up tenants as setup; since the M7 review, signup itself is limited
+    # per IP (the test client is always 127.0.0.1). Clear only the auth buckets.
+    client = Redis.from_url(get_settings().redis_url)
+    try:
+        for pattern in ("rl:signup:*", "rl:login:*"):
+            keys = [k async for k in client.scan_iter(pattern)]
+            if keys:
+                await client.delete(*keys)
+        yield
+    finally:
+        await client.aclose()
+
+
 @pytest_asyncio.fixture(loop_scope="session")
 async def real_store() -> AsyncIterator[None]:
     client = Redis.from_url(get_settings().redis_url)
