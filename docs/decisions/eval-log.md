@@ -121,7 +121,7 @@ Hypotheses against measurement:
 - With 7-17 questions per type, per-type moves of 1-2 questions are not evidence by themselves;
   the paraphrase gain (+4 at R@3) and multi-chunk MRR drop are the largest effects measured.
 
-## E3-gen: one generation run, E3 config, limit 6 (2026-10-10) - STOPPED at 21/48
+## E3-gen: one generation run, E3 config, limit 6 (2026-10-10) - part 1, stopped at 21/48
 
 Config: hybrid + rerank, candidates 40, limit 6, llama3.2:3b on CPU via Ollama, answer
 deadline 420 s (Ollama read timeout 300 s). Files: eval/runs/E3-gen (partial_summary.json).
@@ -148,10 +148,56 @@ Format problems (counted by pattern, then read by me):
 - 16/21 answers start with a citation (`[2] According to ...`).
 - Non-numeric brackets the citation parser ignores, so "0 invalid" undercounts: q005
   `[pymupdf4llm]`, q015 `[M6]`. Fused citation: q014 `[3]RIGHT-09`.
-- q021 dumped a raw markdown table and is cut mid-row (likely the 512-token cap).
+- q021 dumped a raw markdown table. (Corrected after the full run: it is a complete table of
+  ~600 characters, not cut off; the earlier "cut mid-row, likely the 512-token cap" was wrong.)
 - q022's raw output echoed prompt tags; strip_prompt_scaffolding removed them.
 
 My own reading of correctness (rough, not the judge, not calibrated): 15 right, 4 partial
 (q001 omits the two-year part, q006 lists 3 of 6 stages, q021 table dump, q027 right conclusion
 from an unrelated quote), 2 wrong (q014 says the docs don't say; q024 gives a deletion reason
 instead of re-processing).
+
+### E3-gen completed: 27 more in three batches of 9 (2026-10-10, measured)
+
+Your order: unanswerable, exact-token, multi-chunk first. `ollama stop` and memory checked
+(8.2-8.6 GB available) before each batch; lowest during a batch 3.86 GB; no 5-minute answer,
+no stall, no clock jump. Final call without --ids wrote summary.json (48/48, no duplicates).
+Timings over all 48: generation p50 120 s, p95 194 s, max 230 s, 101 min in total; first token
+p50 107 s; retrieval p50 0.1 s, max 4.8 s (rerank cached, max 15 ms).
+
+| check | result |
+|---|---|
+| refusal accuracy, unanswerable (exact sentence) | **4/7** correct (q052, q056, q057, q059) |
+| missed refusals | 3/7: q053 answered only "[6]"; q055 pasted an unrelated source, then "There is no mention of payment methods"; q058 "not explicitly stated ... but" + a quote |
+| false refusals, answerable | 1/41: q061 (its gold wasn't retrieved in E3 either) |
+| errors | 0/48 |
+| numeric citations | 40 valid, 0 invalid (but see the brackets the check can't see) |
+| answered without any citation | 6/40 (q001, q015, q017, q029, q034, q050) |
+| answered, citing a source that holds a gold span | 15/40 |
+| reference facts | 23 answers checkable; mean share 0.49; all facts found in 7 |
+
+Per type (answered / citing gold / facts all-found of checkable):
+factoid 16 of 17 answered (1 false refusal), 7 cite gold, 4/10; paraphrase 10/10, 3, 1/5;
+exact-token 7/7, 1, 1/4; multi-chunk 7/7, 4, 1/4.
+
+Check limitations seen in this run: the near-refusal flag caught 0, but q055 and q058 are
+paraphrased refusals; the citation check doesn't see non-numeric brackets; the fact check
+penalises reference facts the question didn't ask for (q017).
+
+Format problems over all 48 (counted by pattern and read by me):
+- Starts with a citation: 28/48 answers.
+- A citation and nothing else: q053 "[6]", q040 "[5]".
+- Brackets the citation check can't see: q005 `[pymupdf4llm]`, q015 `[M6]`,
+  q038 `[X-Accel-Buffering: no]`. Fused to a word: q014 `[3]RIGHT-09`.
+- Tags left in the final answer (strip_prompt_scaffolding doesn't cover them): `<answer>...</answer>`
+  in q034 and q049; `<nexus readings export ...>` wrapping in q041; an HTML `</p>` in q050;
+  q033 quotes a heading with `<history>` in it. q022's echoed tags were in the raw text only.
+- Raw source pasted instead of an answer: q021 (a markdown table), q055.
+- No answer was truncated (all end cleanly; the longest is 793 characters).
+
+My own reading of correctness for the 41 answerable (rough, not the judge, not calibrated):
+**23 right, 9 partial, 8 wrong, 1 false refusal.**
+- Wrong: q014, q024, q028, q031, q033, q040 (only "[5]"), q042 ("restricts" tools; they are
+  pre-approved), q045.
+- Partial: q001, q006, q021, q027, q029, q034, q046, q047, q049.
+- Paraphrase is weakest (wrong: q024, q028, q031, q033), consistent with its retrieval.
