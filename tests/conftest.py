@@ -191,7 +191,7 @@ def new_tenant(
 
     async def make() -> Caller:
         signup = await client.post(
-            "/auth/signup",
+            "/v1/auth/signup",
             json={
                 "tenant_name": f"tenant-{uuid.uuid4().hex}",
                 "email": f"user-{uuid.uuid4().hex}@example.com",
@@ -233,7 +233,7 @@ def new_member(client: AsyncClient) -> Callable[[Caller], Awaitable[Caller]]:
             await session.commit()
             user_id = user.id
         login = await client.post(
-            "/auth/login", json={"email": email, "password": "member-password-1"}
+            "/v1/auth/login", json={"email": email, "password": "member-password-1"}
         )
         assert login.status_code == 200, login.text
         return Caller(

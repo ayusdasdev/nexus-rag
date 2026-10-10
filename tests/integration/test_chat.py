@@ -98,7 +98,7 @@ def llm() -> Iterator[FakeLLM]:
 
 async def _tenant(client: AsyncClient) -> dict[str, Any]:
     signup = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": f"tenant-{uuid.uuid4().hex}",
             "email": f"user-{uuid.uuid4().hex}@example.com",

@@ -32,11 +32,7 @@ def create_app() -> FastAPI:
     )
     install_problem_handlers(app)
     app.include_router(health_router)
-    # Unversioned auth predates /v1; it still works but is left out of the docs.
-    app.include_router(auth_router, include_in_schema=False)
-    # Same router, mounted again under /v1 - versions the whole auth
-    # surface (signup/login/me) in one place, instead of hand-picking
-    # individual routes to double-decorate.
+    # Auth lives only under /v1 (the unversioned mount was removed in M7).
     app.include_router(auth_router, prefix="/v1")
     app.include_router(documents_router, prefix="/v1")
     app.include_router(search_router, prefix="/v1")

@@ -51,7 +51,7 @@ async def test_search_never_returns_a_deleted_documents_points(
     client: AsyncClient, store: VectorStore, wired: None
 ) -> None:
     signup = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": f"tenant-{uuid.uuid4().hex}",
             "email": f"user-{uuid.uuid4().hex}@example.com",

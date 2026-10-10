@@ -49,7 +49,7 @@ def blob_root(tmp_path: Path) -> Path:
 
 async def _signup(client: AsyncClient) -> dict[str, Any]:
     response = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": f"tenant-{uuid.uuid4().hex}",
             "email": f"user-{uuid.uuid4().hex}@example.com",

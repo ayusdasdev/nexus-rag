@@ -42,7 +42,7 @@ def _tamper_payload(token: str) -> str:
 
 async def _signup(client: AsyncClient, email: str | None = None) -> dict[str, Any]:
     response = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": _unique_tenant_name(),
             "email": email or _unique_email(),
@@ -59,7 +59,7 @@ async def test_signup_creates_tenant_and_user_and_returns_token(
 ) -> None:
     email = _unique_email()
     response = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": _unique_tenant_name(),
             "email": email,
@@ -81,7 +81,7 @@ async def test_signup_duplicate_email_returns_409(client: AsyncClient) -> None:
     await _signup(client, email=email)
 
     second = await client.post(
-        "/auth/signup",
+        "/v1/auth/signup",
         json={
             "tenant_name": _unique_tenant_name(),
             "email": email,
@@ -99,7 +99,7 @@ async def test_login_wrong_password_returns_401_with_generic_message(
     email = signup_body["user"]["email"]
 
     response = await client.post(
-        "/auth/login", json={"email": email, "password": "wrong-password"}
+        "/v1/auth/login", json={"email": email, "password": "wrong-password"}
     )
 
     assert response.status_code == 401
@@ -112,7 +112,7 @@ async def test_me_with_valid_token_returns_tenant_id(client: AsyncClient) -> Non
     tenant_id = signup_body["user"]["tenant_id"]
 
     response = await client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {token}"}
+        "/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
     )
 
     assert response.status_code == 200
@@ -120,7 +120,7 @@ async def test_me_with_valid_token_returns_tenant_id(client: AsyncClient) -> Non
 
 
 async def test_me_without_token_returns_401(client: AsyncClient) -> None:
-    response = await client.get("/auth/me")
+    response = await client.get("/v1/auth/me")
 
     assert response.status_code == 401
 
@@ -130,7 +130,7 @@ async def test_me_with_tampered_token_returns_401(client: AsyncClient) -> None:
     tampered = _tamper_payload(signup_body["access_token"])
 
     response = await client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {tampered}"}
+        "/v1/auth/me", headers={"Authorization": f"Bearer {tampered}"}
     )
 
     assert response.status_code == 401
@@ -147,7 +147,7 @@ async def test_me_with_expired_token_returns_401(client: AsyncClient) -> None:
     )
 
     response = await client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {expired_token}"}
+        "/v1/auth/me", headers={"Authorization": f"Bearer {expired_token}"}
     )
 
     assert response.status_code == 401
@@ -164,7 +164,7 @@ async def test_signup_concurrent_duplicate_email_only_one_succeeds(
 
     async def attempt() -> int:
         response = await client.post(
-            "/auth/signup",
+            "/v1/auth/signup",
             json={
                 "tenant_name": _unique_tenant_name(),
                 "email": email,
@@ -195,7 +195,7 @@ async def test_login_runs_password_verification_even_for_unknown_email(
     monkeypatch.setattr(security, "verify_password", spy_verify)
 
     response = await client.post(
-        "/auth/login", json={"email": _unique_email(), "password": "whatever"}
+        "/v1/auth/login", json={"email": _unique_email(), "password": "whatever"}
     )
 
     assert response.status_code == 401
@@ -300,3 +300,16 @@ async def test_unknown_fields_in_credentials_are_422(
     body = {**_signup_body("correct-horse-battery"), "role": "admin", "tenant_id": "x"}
 
     assert (await client.post(path, json=body)).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [("POST", "/auth/signup"), ("POST", "/auth/login"), ("GET", "/auth/me")],
+)
+async def test_the_unversioned_auth_routes_are_gone(
+    client: AsyncClient, method: str, path: str
+) -> None:
+    # Removed in M7 (your decision): only /v1/auth/* remains.
+    response = await client.request(method, path, json={} if method == "POST" else None)
+
+    assert response.status_code == 404
