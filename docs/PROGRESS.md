@@ -301,6 +301,9 @@ Free setup only; ask before any run over 30 minutes.
 - [ ] 8.5b Migration 3 (`eval_runs`, `eval_results`), `/v1/eval/*` endpoints, `nexus eval run`:
   not started (after the experiments you asked for first).
 - [ ] 8.5 `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
+- [x] 8.6a E0-E2 on dev (`44bd4d0`, eval-log.md): Recall@10 dense 31/41, sparse 25/41,
+  hybrid 34/41; MRR 0.532 / 0.546 / 0.628. Paraphrase weakest everywhere (hybrid 6/10).
+  **Next: E3 (hybrid + rerank, ~31 min estimated) waits for your OK; no generation run yet.**
 - [ ] 8.6 Experiments E0-E3 and the chunk-size sweep at minimum (E4-E10 as time allows), each
   with its hypothesis written first in `docs/decisions/eval-log.md`. Include the 4.7
   hypothesis: plain RRF hurts paraphrases when the sparse list is short and the dense list
