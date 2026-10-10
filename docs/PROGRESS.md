@@ -286,9 +286,15 @@ Free setup only; ask before any run over 30 minutes.
 - [x] 8.3 `eval/metrics.py` with hand-computed tests (`aed8ce0`).
 - [ ] 8.4 `eval/judge.py` and `eval/prompts/`: claim-level faithfulness, 0-1-2 correctness, refusal
   detection. Calibration tool where **you** hand-grade 15 answers. A local judge is reported as rough.
-- [ ] 8.5 Migration 3 (`eval_runs`, `eval_results`), `eval/runner.py` with `--set` overrides,
-  config and git SHA recorded. Endpoints under `/v1/eval/*` (admin, async via Celery).
-  `nexus eval run`.
+- [x] 8.5a v1 final (`3c488d5`; sha256 pin test `16ae46a`): any change becomes v2. Runner
+  `eval/runner.py` (`e8380e3`): `--set mode/rerank/candidates/expand/limit`, `--split dev`;
+  `holdout` refused without `--final-holdout`; one line per question flushed as it finishes,
+  resumable per `--tag`, changed config refused; run.json has config, dataset, split seed,
+  runner seed, git sha + dirty flag, times. Rerank score cache in `eval/state/` (`079cc57`).
+  Calls `retrieve()` in-process for the eval tenant (an HTTP run would be paced by the search
+  rate limit). Tested with fakes only.
+- [ ] 8.5b Migration 3 (`eval_runs`, `eval_results`), `/v1/eval/*` endpoints, `nexus eval run`:
+  not started (after the experiments you asked for first).
 - [ ] 8.5 `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
 - [ ] 8.6 Experiments E0-E3 and the chunk-size sweep at minimum (E4-E10 as time allows), each
   with its hypothesis written first in `docs/decisions/eval-log.md`. Include the 4.7
