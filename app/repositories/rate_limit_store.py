@@ -75,11 +75,17 @@ class RedisRateLimitStore:
             args += [bucket.capacity, bucket.refill_per_second]
         try:
             allowed, remaining, wait = await self._script(keys=list(keys), args=args)
-        except (RedisError, OSError) as exc:
+            retry_after = float(wait)
+            decision = Decision(
+                allowed=int(allowed) == 1,
+                remaining=float(remaining),
+                retry_after=math.inf if retry_after < 0 else retry_after,
+            )
+        except (RedisError, OSError, TimeoutError) as exc:
             raise RateLimiterUnavailable(type(exc).__name__) from exc
-        retry_after = float(wait)
-        return Decision(
-            allowed=int(allowed) == 1,
-            remaining=float(remaining),
-            retry_after=math.inf if retry_after < 0 else retry_after,
-        )
+        except (ValueError, TypeError, IndexError) as exc:
+            # A reply we can't read is no answer at all: same fail-open/closed rules.
+            raise RateLimiterUnavailable(
+                f"malformed reply ({type(exc).__name__})"
+            ) from exc
+        return decision

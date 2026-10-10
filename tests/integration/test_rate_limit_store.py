@@ -108,3 +108,42 @@ async def test_an_unreachable_redis_is_a_typed_error() -> None:
             await RedisRateLimitStore(dead).take(_keys(), [Bucket(1, 0.0)])
     finally:
         await dead.aclose()
+
+
+# --- M7 review, MEDIUM-2: a stalled Redis must fail fast, not hang -------------------
+
+
+async def test_a_redis_that_accepts_but_never_answers_fails_fast() -> None:
+    from app.core.redis import make_redis
+
+    async def blackhole(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        await asyncio.sleep(30)  # accept the connection, never reply
+
+    server = await asyncio.start_server(blackhole, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    stalled = make_redis(f"redis://127.0.0.1:{port}/0")
+    try:
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        with pytest.raises(RateLimiterUnavailable):
+            await RedisRateLimitStore(stalled).take(_keys(), [Bucket(1, 0.0)])
+        assert loop.time() - started < 3.0
+    finally:
+        await stalled.aclose()
+        server.close()
+
+
+async def test_a_malformed_script_reply_is_unavailable_not_a_500(
+    redis: Redis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = RedisRateLimitStore(redis)
+
+    async def garbage(*args: object, **kwargs: object) -> list[str]:
+        return ["not-a-number"]
+
+    monkeypatch.setattr(store, "_script", garbage)
+
+    with pytest.raises(RateLimiterUnavailable):
+        await store.take(_keys(), [Bucket(1, 0.0)])

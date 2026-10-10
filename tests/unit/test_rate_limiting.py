@@ -104,3 +104,12 @@ def test_buckets_follow_your_m7_limits_and_users_get_half() -> None:
     assert default_tenant.capacity == 120
     assert default_tenant.refill_per_second == 2.0
     assert default_user.capacity == 60
+
+
+def test_the_shared_redis_client_has_short_socket_timeouts() -> None:
+    from app.core.redis import make_redis
+
+    kwargs = make_redis("redis://localhost:6379/0").connection_pool.connection_kwargs
+
+    assert kwargs["socket_connect_timeout"] == 0.5
+    assert kwargs["socket_timeout"] == 0.5
