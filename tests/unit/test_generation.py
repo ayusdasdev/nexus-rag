@@ -392,6 +392,75 @@ def test_strip_prompt_scaffolding_is_linear_on_hostile_output() -> None:
         assert time.perf_counter() - start < 1.0
 
 
+# Leftover wrappers seen in the M8 E3-gen run (llama3.2:3b): q034/q049 wrapped the whole
+# answer in <answer>, q050 carried an HTML </p> over from a parsed page.
+def test_strip_prompt_scaffolding_removes_an_answer_wrapper() -> None:
+    text = "<answer>\nReadings are kept for ninety days [5].\n</answer>"
+
+    assert strip_prompt_scaffolding(text) == "Readings are kept for ninety days [5]."
+
+
+def test_strip_prompt_scaffolding_removes_block_html_left_from_a_page() -> None:
+    text = "Trafilatura (main content out of HTML)</p>\n \n PyMuPDF is licensed [2]."
+
+    assert strip_prompt_scaffolding(text) == (
+        "Trafilatura (main content out of HTML) \n PyMuPDF is licensed [2]."
+    )
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "<answer>",
+        "</answer>",
+        "<ANSWER>",
+        "<response>",
+        "</response>",
+        "<history>",
+        "</history>",
+        "<p>",
+        "</p>",
+        "<p class='x'>",
+        "<div>",
+        "</div>",
+    ],
+)
+def test_strip_prompt_scaffolding_removes_each_leftover_wrapper(wrapper: str) -> None:
+    assert strip_prompt_scaffolding(f"{wrapper}Two hours [1].{wrapper}") == (
+        "Two hours [1]."
+    )
+
+
+def test_a_removed_tag_between_two_words_leaves_a_space_or_a_line_break() -> None:
+    assert strip_prompt_scaffolding("One</p><p>two<br>three<br/>four") == (
+        "One two\nthree\nfour"
+    )
+
+
+def test_tags_inside_code_are_quoted_text_and_kept() -> None:
+    # q033: the answer quoted a source that names the tags in backticks.
+    text = "Wrap it in `<history>`/`</history>` [2].\n```\n<answer>x</answer>\n```"
+
+    assert strip_prompt_scaffolding(text) == text
+
+
+def test_similar_names_and_other_angle_text_are_kept() -> None:
+    # q041 wrapped a CLI command in <...>; deleting it would delete the answer.
+    text = (
+        "<nexus readings export --since 1d> exports a day. <answers> <history-v2> "
+        "<pre> <paragraph>"
+    )
+
+    assert strip_prompt_scaffolding(text) == text
+
+
+def test_leftover_wrapper_stripping_is_linear_on_hostile_output() -> None:
+    for text in ("`" * 200_000, "` " * 100_000, "<answer" * 30_000, "</p" * 60_000):
+        start = time.perf_counter()
+        strip_prompt_scaffolding(text)
+        assert time.perf_counter() - start < 1.0
+
+
 # --- history (M6, ADR-0009) -------------------------------------------------------
 
 

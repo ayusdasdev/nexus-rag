@@ -22,8 +22,10 @@ answer are never fetched.
     are resolved on the server from `number`, never taken from model text.
   - `done`: `{answer, refused, external_links, skipped_chunks}`. `answer` is the
     authoritative text, with invalid citations removed and any echoed prompt wrappers
-    (`<document ...>`, `</document>`, `<question>`, ...) stripped (seen in M5 5.5). A client should replace the streamed
-    text with it.
+    (`<document ...>`, `</document>`, `<question>`, ...) stripped (seen in M5 5.5). Leftover
+    `<answer>`, `<response>`, `<history>`, `<p>`, `<div>` and `<br>` tags outside code spans
+    are stripped too (seen in the M8 E3-gen run); other HTML such as `<b>` is kept. A client
+    should replace the streamed text with it.
   - `error`: `{code, message}` with a fixed message per error class (`llm_unavailable`,
     `llm_rate_limited`, `llm_refused`, `llm_rejected`, `llm_not_configured`). Provider details
     stay in the server log.

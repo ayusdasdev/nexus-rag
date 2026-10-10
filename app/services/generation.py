@@ -179,12 +179,62 @@ _SCAFFOLD_TAG = re.compile(
     re.IGNORECASE,
 )
 _EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
+# Other wrappers left in answers (M8 E3-gen: <answer> in q034/q049, </p> in q050), and a
+# run of them as one unit. Inline HTML such as <b> is left alone. Bounded like the above.
+_LEFTOVER_TAG = r"<[ \t]{0,4}/?[ \t]{0,4}(?:answer|response|history|p|div|(br))(?=[\s/>])[^<>\n]{0,200}>"
+_LEFTOVER_RUN = re.compile(rf"(?:{_LEFTOVER_TAG})+[ \t]*\n?", re.IGNORECASE)
+_TICKS = re.compile(r"`+")
+
+
+def code_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each `code` span or ``` block: a backtick run up to the next run of
+    the same length. One pass, so it stays linear on any output."""
+    runs = [m.span() for m in _TICKS.finditer(text)]
+    following: list[int | None] = [None] * len(runs)
+    last: dict[int, int] = {}
+    for i in range(len(runs) - 1, -1, -1):
+        size = runs[i][1] - runs[i][0]
+        following[i] = last.get(size)
+        last[size] = i
+    spans: list[tuple[int, int]] = []
+    i = 0
+    while i < len(runs):
+        j = following[i]
+        if j is None:
+            i += 1
+            continue
+        spans.append((runs[i][0], runs[j][1]))
+        i = j + 1
+    return spans
+
+
+def _outside_code(text: str, fix: Callable[[str], str]) -> str:
+    out: list[str] = []
+    last = 0
+    for start, end in code_spans(text):
+        out += [fix(text[last:start]), text[start:end]]
+        last = end
+    out.append(fix(text[last:]))
+    return "".join(out)
+
+
+def _strip_leftover_tags(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        if match.group(1):
+            return "\n"
+        before = text[match.start() - 1 : match.start()]
+        after = text[match.end() : match.end() + 1]
+        # Between two words a space keeps them apart; at a line edge nothing is needed.
+        return " " if before.strip() and after.strip() else ""
+
+    return _LEFTOVER_RUN.sub(replace, text)
 
 
 def strip_prompt_scaffolding(text: str) -> str:
     """Remove echoed <document ...>, </document>, <documents>, <question> wrappers (and their
-    closing tags) from an answer. The text between them is kept."""
-    without_tags = _SCAFFOLD_TAG.sub("", text)
+    closing tags) from an answer, and leftover <answer>, <response>, <history>, <p>, <div>
+    and <br> tags outside code. The text between them is kept."""
+    without_tags = _outside_code(_SCAFFOLD_TAG.sub("", text), _strip_leftover_tags)
     return _EXTRA_BLANK_LINES.sub("\n\n", without_tags).strip()
 
 
