@@ -377,7 +377,13 @@ Free setup only; ask before any run over 30 minutes.
   no alerts. Final, not tuned on: R@1 5/10, R@3 8/10, R@5 9/10, R@10 9/10, MRR 0.670,
   nDCG@10 0.732. Dev E3: 20/41, 27/41, 31/41, 34/41, 0.635, 0.706. Not worse; within noise.
   q051 (multi-chunk) missed. Hold-out refusal accuracy: not run (optional; your call).
-- [ ] 8.6q M8 summary in README.md (measured numbers only).
+- [x] 8.6q M8 summary in README.md (measured numbers only). The three bugs you listed are
+  credited to where they were found: message order, a flaky test-int in M8; the refund stub,
+  test-int at the M8 start; JWT leeway, M4 integration tests, so not the evaluation. The
+  evaluation's own finds are listed separately.
+- [ ] M8 items still open from the guide: migration 3 + `/v1/eval/*` + `nexus eval run`;
+  `run-eval` command, `eval-report` skill, analyst subagent; failure buckets A-G (8.7);
+  parent-child chunking (E9); the M8 security review. Your call which of these close M8.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
