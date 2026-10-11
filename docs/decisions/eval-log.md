@@ -344,3 +344,45 @@ because hits don't store them), for E3 and E3-neighbors.
   fit, so a generation run would see fewer distinct sources.
 - Time: 1-3 min (rerank cached, since expansion happens after it); a rerank stage over 1 s
   on any question means the cache missed, and I stop and tell you.
+
+### E3-neighbors result (measured)
+Run 2026-10-11 08:30:31-08:30:35 UTC (4 s; ~1 min estimated, rerank fully cached: max
+rerank stage 11 ms), dev 48, clean tree (`07d5647`), min available memory 7,691 MB. Hit order
+identical to E3 for all 48 questions (checked), as designed.
+
+| 41 answerable | R@1 | R@3 | R@5 | R@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| E3 | 20 | 27 | 31 | 34 | 0.635 | 0.706 |
+| E3-neighbors | 21 | 29 | 32 | 36 | 0.685 | 0.745 |
+
+| per type, full R@10 / MRR | E3 | E3-neighbors |
+|---|---|---|
+| factoid (17) | 15 / 0.680 | 16 / 0.739 |
+| paraphrase (10) | 8 / 0.550 | 8 / 0.550 |
+| exact-token (7) | 7 / 0.881 | 7 / 0.881 |
+| multi-chunk (7) | 4 / 0.401 | 5 / 0.548 |
+
+Only 3 questions moved, all up:
+- q006 (factoid): missed in E3, found at rank 1;
+- q046 (multi-chunk): first hit rank 3 -> 1, R@3 0.5 -> 1.0;
+- q050 (multi-chunk): first hit 7 -> 2, R@10 0.67 -> 1.0.
+
+Each is a gold span in a chunk next to a hit.
+
+Predictions vs result:
+- multi-chunk full R@10 >= 5/7 and MRR up: **held** (5/7, 0.401 -> 0.548).
+- other types at most +2 at R@10, R@1 almost unchanged: **held** (factoid +1 at R@10 and
+  R@1, paraphrase and exact-token unchanged).
+- overall R@10 35-37/41: **held** (36/41). Nothing dropped (by construction).
+- budget, median 3-4 of the top 6 fit: **wrong.** Tokens per hit rose from a median of 172
+  to 425 (mean 176 -> 420), but a median of 6 of 6 still fit in 2500. All 6 fit in 25/48
+  questions, 5 in 14 and 4 in 9 (E3: all 6 in 48/48). So 23/48 questions would lose 1-2
+  sources in a generation run.
+- time 1-3 min: faster than estimated (4 s).
+
+Caveats:
+- With expansion, a "hit" is a three-chunk window, a larger target than one chunk, so these
+  numbers measure whether the answer model would *see* the span, not ranking precision.
+- n = 3 questions moved, so the gain is small and the sample is small.
+- Answer quality with ~2.4x longer sources on llama3.2:3b is unmeasured; no generation was
+  run.
