@@ -342,7 +342,14 @@ Free setup only; ask before any run over 30 minutes.
   It caught 2/5 of your "n" (missed the q012 wrong-source case), gave no unsupported claims in
   any reply, and scored all 3 unanswerables 0 (including 2 exact correct refusals). Rough judge
   scores on 20: correctness 0/1/2 = 3/14/3, faithful 12/8. eval-log.md has the details.
-- [ ] 8.6j Your decision: what (if anything) to change about the judge before it's used.
+- [x] 8.6j Your decision: the judge is left unchanged and its numbers are not used anywhere
+  (ADR-0011: it failed calibration). Headline answer quality = deterministic checks + your 15
+  hand grades (n = 15: correctness 0/1/2 = 1/4/10, faithful 10 y / 5 n; per type in
+  eval-log.md).
+- [ ] 8.6k E3-neighbors (E3 + expand=neighbors, retrieval only, dev). The runner now scores the
+  expanded text (`retrieval.expanded_text`, shared with chat), so expansion can be measured.
+  Hypothesis written in eval-log.md before the run; estimate 1-3 min (rerank cached).
+- [ ] 8.6l Ask you before the chunk-size sweep, with a time estimate (re-ingestion per size).
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):

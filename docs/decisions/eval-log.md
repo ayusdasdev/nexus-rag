@@ -289,3 +289,28 @@ carry less information than a constant, so they shouldn't be reported as a quali
 Refusals should stay with the deterministic check. Anything that changes the judge (prompt,
 a reason field, per-citation faithfulness, a bigger model, Anthropic) is your decision and
 would need a new calibration against these same 15 grades.
+
+### Decision (2026-10-11): the 3B judge failed calibration (ADR-0011)
+The judge isn't changed, and its numbers aren't used anywhere as a quality measure. It failed
+on four counts:
+- correctness exact 7/15 vs 10/15 for always "2";
+- faithfulness 8/15 vs 10/15 for always "faithful";
+- all 3 unanswerables scored 0, including 2 exact correct refusals;
+- no unsupported claims ever listed.
+
+Headline answer-quality metrics are the deterministic checks plus your hand grades.
+
+**Your hand grades of E3-gen, a small hand-measured sample (n = 15):**
+
+| type | n | correctness 0 / 1 / 2 | faithful y / n |
+|---|---|---|---|
+| factoid | 6 | 0 / 1 / 5 | 5 / 1 |
+| paraphrase | 4 | 1 / 0 / 3 | 2 / 2 |
+| exact-token | 2 | 0 / 2 / 0 | 2 / 0 |
+| multi-chunk | 2 | 0 / 1 / 1 | 0 / 2 |
+| unanswerable | 1 | 0 / 0 / 1 | 1 / 0 |
+| **all** | **15** | **1 / 4 / 10** | **10 / 5** |
+
+- 7/15 are both fully correct (2) and faithful: q007, q008, q015, q018, q022, q030, q056.
+- The 15 were drawn from the seeded judge sample, not chosen to be representative per type.
+  Per-type counts of 1-6 are too small to compare types.
