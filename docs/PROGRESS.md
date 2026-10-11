@@ -346,10 +346,12 @@ Free setup only; ask before any run over 30 minutes.
   (ADR-0011: it failed calibration). Headline answer quality = deterministic checks + your 15
   hand grades (n = 15: correctness 0/1/2 = 1/4/10, faithful 10 y / 5 n; per type in
   eval-log.md).
-- [ ] 8.6k E3-neighbors (E3 + expand=neighbors, retrieval only, dev). The runner now scores the
-  expanded text (`retrieval.expanded_text`, shared with chat), so expansion can be measured.
-  Hypothesis written in eval-log.md before the run; estimate 1-3 min (rerank cached).
-- [ ] 8.6l Ask you before the chunk-size sweep, with a time estimate (re-ingestion per size).
+- [x] 8.6k E3-neighbors (`a82573d` scores the expanded text, `07d5647` hypothesis first,
+  `3f081aa` result). Same hit order as E3; R@10 34 -> 36/41, MRR 0.635 -> 0.685; multi-chunk
+  full R@10 4 -> 5/7, MRR 0.401 -> 0.548; only q006, q046, q050 moved (all up). Tokens/hit median
+  172 -> 425; all top-6 fit 2500 in 25/48 (E3 48/48). 4 s (rerank cached). No generation.
+- [ ] 8.6l Chunk-size sweep: asked you (estimate ~75-90 min for 200 and 500, separate tenants);
+  waiting for your decision.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
