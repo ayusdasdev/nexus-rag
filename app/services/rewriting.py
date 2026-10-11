@@ -12,6 +12,7 @@ from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 
 from app.core.config import RewriteMode
+from app.core.tracing import span
 from app.providers.llm import ChatMessage, LLMError, LLMProvider
 from app.services.generation import HistoryTurn, approx_tokens, neutralise
 from app.services.prompts import load_prompt
@@ -150,6 +151,7 @@ async def rewrite_query(
     """The query to retrieve with. The question itself on the first turn or when mode is off."""
     if not history or mode == "off":
         return question
-    if mode == "rule":
-        return _rule_rewrite(history, question)
-    return await _llm_rewrite(history, question, llm, slots, timeout_seconds)
+    with span("rewrite", mode=mode):
+        if mode == "rule":
+            return _rule_rewrite(history, question)
+        return await _llm_rewrite(history, question, llm, slots, timeout_seconds)

@@ -14,6 +14,7 @@ from app.core.request_context import (
     set_request_id,
     set_tenant_id,
 )
+from app.core.tracing import traced
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ class RequestIdMiddleware:
             await send(message)
 
         try:
-            await self.app(scope, receive, send_with_id)
+            with traced(request_id):
+                await self.app(scope, receive, send_with_id)
         except Exception as exc:
             logger.exception("unhandled %s", type(exc).__name__)
             if started:

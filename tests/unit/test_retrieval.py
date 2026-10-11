@@ -906,3 +906,45 @@ def test_expanded_text_without_neighbors_is_the_hit_text() -> None:
     )
 
     assert retrieval.expanded_text(item) == "hit"
+
+
+# --- retrieval stages land in the request trace (M9 9.1) ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_retrieve_records_each_stage_into_the_request_trace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core import tracing
+
+    _fixed_embed_query(monkeypatch)
+    tenant, doc, c1 = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    store = FakeVectorStore(dense_hits=[_hit_id(c1, doc, 0, 0.9)], sparse_hits=[])
+    records = [
+        ChunkRecord(
+            id=c1,
+            document_id=doc,
+            chunk_index=0,
+            text="A",
+            heading_path=None,
+            page=None,
+            token_count=1,
+        )
+    ]
+
+    with tracing.traced("req") as trace:
+        result = await retrieval.retrieve(
+            store=store,
+            reranker=_TextScoredReranker({"A": 0.5}),
+            fetch_chunks=_fetcher(records),
+            tenant_id=tenant,
+            query="q",
+            limit=10,
+            trace=True,
+        )
+
+    assert result.trace is not None
+    assert [s.name for s in trace.spans] == [s.name for s in result.trace.stages]
+    assert {"embed_query", "dense_search", "sparse_search", "fuse", "rerank"} <= {
+        s.name for s in trace.spans
+    }

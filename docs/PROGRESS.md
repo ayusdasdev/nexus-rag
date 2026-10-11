@@ -439,6 +439,12 @@ records absolute paths (`ce64389`).
   Uvicorn and the Celery worker use the same format. Worker lines carry no tenant_id: setting
   it per task risks leaking it between tasks. Every existing log call was audited; none logs
   document text or prompts.
+- [x] 9.1b `app/core/tracing.py`: one request-scoped trace per request, started by the
+  request-id middleware. `with span(name):` and `record(name, ms)` add timed spans (a failing
+  span records only the error's type). Wired into:
+  - every retrieval stage (the existing stage timings feed it);
+  - the follow-up rewrite (`rewrite`, with its mode);
+  - generation (`llm_first_token`, and `generate` with model and source count).
 - [ ] 9.1 JSON structured logs (request_id, tenant_id; no document content). `span()` tracing
   helper. Migration 4 `query_traces`. `POST /v1/messages/{id}/feedback` and
   `GET /v1/traces/{request_id}` (cross-tenant gives 404).

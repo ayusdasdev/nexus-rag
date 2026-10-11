@@ -476,3 +476,30 @@ async def test_a_provider_failure_is_logged_by_type_without_its_text(
 
     assert "LLMUnavailable" in caplog.text
     assert "SECRET-DOC-TEXT" not in caplog.text
+
+
+# --- generation spans (M9 9.1) -------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_answer_records_first_token_and_generate_spans() -> None:
+    from app.core import tracing
+
+    with tracing.traced("req") as trace:
+        await _events(
+            [_hit("Charging takes two hours.")], FakeLLM(["Two ", "hours [1]."])
+        )
+
+    names = [s.name for s in trace.spans]
+    assert names == ["llm_first_token", "generate"]
+    assert trace.spans[1].attributes == {"model": "fake", "sources": 1}
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_without_sources_records_no_generation_span() -> None:
+    from app.core import tracing
+
+    with tracing.traced("req") as trace:
+        await _events([], FakeLLM(["unused"]))
+
+    assert trace.spans == []

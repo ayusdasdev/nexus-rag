@@ -158,3 +158,27 @@ async def test_verifying_a_token_puts_its_tenant_into_the_log_context(
         assert current_tenant_id() == tenant
     finally:
         reset_tenant_id(token)
+
+
+@pytest.mark.asyncio
+async def test_each_request_gets_its_own_trace_under_its_request_id() -> None:
+    from app.core import tracing
+
+    app = create_app()
+    seen: list[tuple[str | None, int]] = []
+
+    @app.get("/test/trace")
+    async def trace_route() -> dict[str, str]:
+        trace = tracing.current_trace()
+        assert trace is not None
+        tracing.record("stage", 1.0)
+        seen.append((trace.request_id, len(trace.spans)))
+        return {}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.get("/test/trace", headers={"X-Request-ID": "r-1"})
+        await client.get("/test/trace", headers={"X-Request-ID": "r-2"})
+
+    assert seen == [("r-1", 1), ("r-2", 1)]
+    assert tracing.current_trace() is None

@@ -6,11 +6,13 @@ Emits the SSE events of ADR-0008: sources, token*, citations, done (or error).
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import AbstractAsyncContextManager, nullcontext
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.tracing import record
 from app.providers.llm import (
     LLMError,
     LLMNotConfigured,
@@ -155,6 +157,11 @@ async def answer_events(
         stream = llm.stream(built.messages, max_tokens=answer_max_tokens)
         loop = asyncio.get_running_loop()
         deadline = None if deadline_seconds is None else loop.time() + deadline_seconds
+        started = time.perf_counter()
+        span_attributes: dict[str, object] = {
+            "model": llm.name,
+            "sources": len(built.sources),
+        }
         try:
             while True:
                 # The deadline wraps only the await, never our own yield.
@@ -163,23 +170,31 @@ async def answer_events(
                         token = await anext(stream)
                     except StopAsyncIteration:
                         break
+                if not parts:
+                    record("llm_first_token", (time.perf_counter() - started) * 1000)
                 parts.append(token)
                 yield ChatEvent("token", {"text": token})
         except TimeoutError:
             logger.warning("LLM %s passed the %ss deadline", llm.name, deadline_seconds)
+            span_attributes["error"] = "TimeoutError"
             yield _TIMEOUT_ERROR
             return
         except LLMError as exc:
             # By type only: provider error text can echo prompt or document fragments.
             logger.warning("LLM %s failed: %s", llm.name, type(exc).__name__)
+            span_attributes["error"] = type(exc).__name__
             yield _error_event(exc)
             return
         except Exception as exc:  # noqa: BLE001 - last resort, see comment below
             # A provider bug (e.g. malformed JSON) still ends the stream cleanly.
             logger.error("LLM %s raised %s", llm.name, type(exc).__name__)
+            span_attributes["error"] = type(exc).__name__
             yield _GENERIC_ERROR
             return
         finally:
+            record(
+                "generate", (time.perf_counter() - started) * 1000, **span_attributes
+            )
             # Shielded so a cancelled request still closes the upstream connection.
             await asyncio.shield(stream.aclose())
 

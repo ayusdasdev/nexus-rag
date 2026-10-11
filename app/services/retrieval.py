@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 from uuid import UUID
 
 from app.core.config import Expand
+from app.core.tracing import record
 from app.providers.embeddings import get_embedder, get_sparse_embedder
 from app.providers.reranker import RERANK_MAX_CANDIDATES, Reranker, rerank
 from app.repositories.chunk_repository import ChunkRecord
@@ -163,6 +164,13 @@ def _elapsed_ms(start: float) -> float:
     return (time.perf_counter() - start) * 1000.0
 
 
+def _stage(stages: list[StageTiming], name: str, start: float) -> None:
+    """Time a stage for the search trace and the request trace (M9) alike."""
+    ms = _elapsed_ms(start)
+    stages.append(StageTiming(name, ms))
+    record(name, ms)
+
+
 async def retrieve(
     *,
     store: VectorSearcher,
@@ -197,7 +205,7 @@ async def retrieve(
 
     start = time.perf_counter()
     query_embedding = await asyncio.to_thread(embed_query, query)
-    stages.append(StageTiming("embed_query", _elapsed_ms(start)))
+    _stage(stages, "embed_query", start)
 
     dense: list[Candidate] = []
     if use_dense:
@@ -210,7 +218,7 @@ async def retrieve(
             candidates,
             document_ids,
         )
-        stages.append(StageTiming("dense_search", _elapsed_ms(start)))
+        _stage(stages, "dense_search", start)
 
     sparse: list[Candidate] = []
     if use_sparse:
@@ -223,18 +231,18 @@ async def retrieve(
             candidates,
             document_ids,
         )
-        stages.append(StageTiming("sparse_search", _elapsed_ms(start)))
+        _stage(stages, "sparse_search", start)
 
     start = time.perf_counter()
     fused = fuse_rrf(dense, sparse)
-    stages.append(StageTiming("fuse", _elapsed_ms(start)))
+    _stage(stages, "fuse", start)
 
     # Hydrate the whole fused list (at most 2 x candidates ids) before cutting it, so a
     # chunk fetch_chunks drops (another tenant's, or a document that isn't ready) never
     # takes a slot in limit or in the rerank window.
     start = time.perf_counter()
     records = await fetch_chunks(tenant_id, [c.chunk_id for c in fused])
-    stages.append(StageTiming("fetch_chunks", _elapsed_ms(start)))
+    _stage(stages, "fetch_chunks", start)
     by_id = {record.id: record for record in records}
     available = [c for c in fused if c.chunk_id in by_id]
 
@@ -245,7 +253,7 @@ async def retrieve(
 
         start = time.perf_counter()
         scored = await asyncio.to_thread(rerank, reranker, query, texts)
-        stages.append(StageTiming("rerank", _elapsed_ms(start)))
+        _stage(stages, "rerank", start)
 
         pairs = sorted(
             zip(ordered, scored.scores, strict=True),
@@ -280,7 +288,7 @@ async def retrieve(
     if expand == "neighbors" and fetch_neighbors is not None:
         start = time.perf_counter()
         items = await _attach_neighbors(items, tenant_id, fetch_neighbors)
-        stages.append(StageTiming("expand", _elapsed_ms(start)))
+        _stage(stages, "expand", start)
 
     result_trace = (
         Trace(
