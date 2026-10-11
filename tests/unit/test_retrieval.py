@@ -859,3 +859,50 @@ async def test_a_chunk_the_fetcher_drops_does_not_take_a_slot_in_limit(
     )
 
     assert [item.chunk_id for item in result.items] == [c1, c2]
+
+
+# --- the text a hit stands for once neighbors are attached (M8) ---------------------
+
+
+def _neighbor(index: int, text: str, doc: uuid.UUID) -> ChunkRecord:
+    return ChunkRecord(
+        id=uuid.uuid4(),
+        document_id=doc,
+        chunk_index=index,
+        text=text,
+        heading_path=None,
+        page=None,
+        token_count=1,
+    )
+
+
+def test_expanded_text_joins_neighbors_around_the_hit_in_index_order() -> None:
+    doc = uuid.uuid4()
+    item = retrieval.RetrievedChunk(
+        chunk_id=uuid.uuid4(),
+        document_id=doc,
+        chunk_index=5,
+        text="hit",
+        heading_path=None,
+        page=None,
+        score=1.0,
+        rank=1,
+        neighbors=(_neighbor(6, "after", doc), _neighbor(4, "before", doc)),
+    )
+
+    assert retrieval.expanded_text(item) == "before\n\nhit\n\nafter"
+
+
+def test_expanded_text_without_neighbors_is_the_hit_text() -> None:
+    item = retrieval.RetrievedChunk(
+        chunk_id=uuid.uuid4(),
+        document_id=uuid.uuid4(),
+        chunk_index=0,
+        text="hit",
+        heading_path=None,
+        page=None,
+        score=1.0,
+        rank=1,
+    )
+
+    assert retrieval.expanded_text(item) == "hit"

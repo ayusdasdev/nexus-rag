@@ -75,3 +75,52 @@ def test_hits_carry_the_file_name_and_stage_timings() -> None:
     assert (hit.document, hit.chunk_index, hit.text, hit.score) == ("a.md", 3, "t", 0.5)
     assert hit.chunk_id == str(UUID(int=1))
     assert result.stages_ms == {"embed_query": 2.0, "rerank": 9.0}
+
+
+def test_with_neighbors_the_scored_text_is_what_the_answer_model_would_see() -> None:
+    from app.repositories.chunk_repository import ChunkRecord
+
+    def record(index: int, text: str) -> ChunkRecord:
+        return ChunkRecord(
+            id=uuid4(),
+            document_id=DOC,
+            chunk_index=index,
+            text=text,
+            heading_path=None,
+            page=None,
+            token_count=1,
+        )
+
+    async def retrieve(**kwargs: Any) -> RetrieveResult:
+        assert kwargs["expand"] == "neighbors"
+        item = RetrievedChunk(
+            chunk_id=UUID(int=1),
+            document_id=DOC,
+            chunk_index=3,
+            text="hit",
+            heading_path=None,
+            page=None,
+            score=0.5,
+            rank=1,
+            neighbors=(record(2, "before"), record(4, "after")),
+        )
+        return RetrieveResult(items=[item], trace=None)
+
+    search = build_search(retrieve, TENANT, {DOC: "a.md"})
+    result = asyncio.run(
+        search({"id": "q1", "question": "Q?"}, RunConfig(expand="neighbors"))
+    )
+
+    hit = result.hits[0]
+    assert hit.text == "before\n\nhit\n\nafter"
+    assert hit.neighbor_indexes == [2, 4]
+
+
+def test_without_neighbors_a_hit_records_none() -> None:
+    result = asyncio.run(
+        build_search(_fake_retrieve([]), TENANT, {DOC: "a.md"})(
+            {"id": "q1", "question": "Q?"}, RunConfig()
+        )
+    )
+
+    assert result.hits[0].neighbor_indexes == []

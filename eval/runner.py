@@ -48,8 +48,11 @@ class Hit:
     chunk_id: str
     document: str
     chunk_index: int
+    # With expand=neighbors: the hit with its neighbors joined around it, as the answer
+    # model would see it (retrieval.expanded_text). Otherwise the chunk's own text.
     text: str
     score: float
+    neighbor_indexes: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

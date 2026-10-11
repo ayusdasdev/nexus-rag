@@ -62,6 +62,14 @@ class RetrievedChunk:
     neighbors: tuple[ChunkRecord, ...] = ()
 
 
+def expanded_text(item: RetrievedChunk) -> str:
+    """The hit with its attached neighbors around it, in chunk_index order: the text an
+    answer is built from. Without neighbors, the hit's own text."""
+    before = [n.text for n in item.neighbors if n.chunk_index < item.chunk_index]
+    after = [n.text for n in item.neighbors if n.chunk_index > item.chunk_index]
+    return "\n\n".join([*before, item.text, *after])
+
+
 @dataclass(frozen=True)
 class RetrieveResult:
     items: list[RetrievedChunk]

@@ -17,7 +17,7 @@ from uuid import UUID
 from app.core.config import Settings
 from app.providers.llm import LLMProvider
 from app.services.chat import answer_events
-from app.services.retrieval import RetrievedChunk, RetrieveResult
+from app.services.retrieval import RetrievedChunk, RetrieveResult, expanded_text
 from eval.runner import Hit, RunConfig, SearchFn, SearchResult
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,8 +109,9 @@ def build_search(
                 chunk_id=str(item.chunk_id),
                 document=doc_names.get(item.document_id, str(item.document_id)),
                 chunk_index=item.chunk_index,
-                text=item.text,
+                text=expanded_text(item),
                 score=item.score,
+                neighbor_indexes=sorted(n.chunk_index for n in item.neighbors),
             )
             for item in result.items
         ]

@@ -28,7 +28,7 @@ from app.services.generation import (
     parse_citations,
     strip_prompt_scaffolding,
 )
-from app.services.retrieval import RetrievedChunk
+from app.services.retrieval import RetrievedChunk, expanded_text
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +61,10 @@ def format_sse(event: ChatEvent) -> str:
 
 
 def _context(item: RetrievedChunk) -> ContextChunk:
-    before = [n.text for n in item.neighbors if n.chunk_index < item.chunk_index]
-    after = [n.text for n in item.neighbors if n.chunk_index > item.chunk_index]
     return ContextChunk(
         chunk_id=item.chunk_id,
         document_id=item.document_id,
-        text="\n\n".join([*before, item.text, *after]),
+        text=expanded_text(item),
         heading_path=item.heading_path,
     )
 
