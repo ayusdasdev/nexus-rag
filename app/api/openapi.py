@@ -44,6 +44,8 @@ _SPECIFIC: dict[str, tuple[str, ...]] = {
     "getConversation": ("404",),
     "deleteConversation": ("404",),
     "postMessage": ("404", "409", "500", "503"),
+    "giveFeedback": ("404",),
+    "getTrace": ("404",),
 }
 
 _SSE_EVENTS: list[type[BaseModel]] = [

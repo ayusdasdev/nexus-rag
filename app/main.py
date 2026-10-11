@@ -12,6 +12,7 @@ from app.api.openapi import install_openapi, operation_id
 from app.api.problems import install_problem_handlers
 from app.api.request_id import RequestIdMiddleware
 from app.api.search import router as search_router
+from app.api.traces import router as traces_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.request_context import install_log_record_factory
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(search_router, prefix="/v1")
     app.include_router(chat_router, prefix="/v1")
     app.include_router(conversations_router, prefix="/v1")
+    app.include_router(traces_router, prefix="/v1")
     install_openapi(app)
     # Added last, so it is the outermost middleware and sees every error.
     app.add_middleware(RequestIdMiddleware)

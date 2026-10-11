@@ -12,7 +12,8 @@ _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 _tenant_id: ContextVar[UUID | None] = ContextVar("tenant_id", default=None)
 
 # What a client may send as X-Request-ID; anything else is replaced, never echoed.
-_SAFE_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
+SAFE_REQUEST_ID = r"^[A-Za-z0-9._-]{1,128}$"
+_SAFE_ID = re.compile(SAFE_REQUEST_ID)
 
 
 def current_request_id() -> str | None:
