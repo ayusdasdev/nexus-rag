@@ -242,3 +242,50 @@ cleanup first).
 - The near-refusal pattern was written from the two cases it now catches (n = 2), so it is
   fitted to them; the tests add four other wordings and four negatives, but its precision on
   new answers is unmeasured.
+
+## Judge calibration: llama3.2:3b one-call judge vs your 15 hand grades (E3-gen)
+
+Date: 2026-10-11. `eval/tools/judge_run.py --run E3-gen`: the approved judge prompt
+(unchanged), Ollama llama3.2:3b, temperature 0, on the stored answers of the fixed
+20-question dev sample (nothing regenerated, no hold-out). Run 07:32:56-08:00:30 UTC
+(27 min 34 s); calls 57-152 s (median ~78 s, the first includes model load); min available
+memory 2,697 MB; no clock jump, no stall. 0 unreadable replies (0/20 errors).
+Verdicts and raw replies: `eval/runs/E3-gen/judge.jsonl`; your grades:
+`eval/calibration/E3-gen.grades.jsonl`; agreement: `eval/calibration/E3-gen.agreement.json`.
+
+Your faithfulness rule: a claim is supported only if the source it cites contains it (a
+right fact cited to the wrong number is "n"). The judge prompt instead asks whether each
+claim is supported by *the sources* (any of them), so some faithfulness disagreement is
+built in.
+
+| agreement on your 15 | judge | always "2" | always "1" | always "faithful" |
+|---|---|---|---|---|
+| correctness exact | **7/15** | 10/15 | 4/15 | |
+| correctness within 1 | **14/15** | 14/15 | 15/15 | |
+| faithful | **8/15** | | | 10/15 |
+
+- **The judge is worse than a constant grader.** Always answering "2" matches your
+  correctness exactly 10/15 times (judge 7/15), and always answering "faithful" matches 10/15
+  (judge 8/15). Within-1 (14/15) says nothing here: always answering "1" gets 15/15.
+- Correctness confusion (yours -> judge): 2->1 ×6, 2->2 ×3, 1->1 ×4, 2->0 ×1, 0->1 ×1. It
+  pulls toward 1: 14 of its 20 grades are 1.
+- **Faithfulness: it caught 2 of your 5 "n"** (q044, q046) and missed 3 (q012, q024, q027).
+  It said "n" on 4 you marked "y" (q008, q021, q034, q056).
+- q012 is a confirmed wrong-source case: the quoted "Hold out ~20%" is in source [1] and
+  the answer cites [2]. The judge rated it faithful. For q024, q027 and q044 the quoted text
+  is in the cited source; your "n" there rests on other claims, which I didn't check.
+- **It never gave a reason:** `unsupported_claims` is empty in all 20 replies, including all
+  8 "faithful: false" verdicts, which contradicts its own prompt.
+- **It fails on refusals:** q056 and q057 are exact correct refusals and q053 is a missed
+  refusal ("[6]"), and it gave all three correctness 0 and faithful false. You graded q056 2/y.
+  The deterministic refusal check gets these right.
+
+Judge's own scores on all 20, **rough and uncalibrated** (and by the above, not reliable):
+correctness 0: 3, 1: 14, 2: 3 (mean 1.00); faithful 12 true / 8 false. Answerable 17:
+0: 0, 1: 14, 2: 3; faithful 12/5. Unanswerable 3: all 0, all unfaithful.
+
+Conclusion (n = 15, one run, one prompt): this judge's correctness and faithfulness scores
+carry less information than a constant, so they shouldn't be reported as a quality number.
+Refusals should stay with the deterministic check. Anything that changes the judge (prompt,
+a reason field, per-citation faithfulness, a bigger model, Anthropic) is your decision and
+would need a new calibration against these same 15 grades.

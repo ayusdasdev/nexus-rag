@@ -334,8 +334,15 @@ Free setup only; ask before any run over 30 minutes.
   354 passed. Re-score: near-refusals 2 (q055, q058), missed 1 (q053), correct 4/7 unchanged;
   4 answers with malformed citations. q017's reference problem left alone (would be v2) and
   logged as a known fact-check limitation.
-- [ ] 8.6i You hand-grade the 15 (`uv run python -m eval.tools.calibrate --run E3-gen`). The
-  real judge runs only after you say "run the judge".
+- [x] 8.6i You graded the 15; judge runner `eval/tools/judge_run.py` (`0ac2ae9`, prompt unchanged,
+  resumable, a verdict line per call). Judge run on the 20-question sample of the stored E3-gen
+  answers: 27 min 34 s, 0/20 unreadable, min available memory 2,697 MB, Ollama stopped after.
+  Agreement with your 15: correctness exact 7/15, within 1 14/15, faithful 8/15. A constant "2"
+  scores 10/15 exact and a constant "faithful" 10/15, so the judge is worse than a constant.
+  It caught 2/5 of your "n" (missed the q012 wrong-source case), gave no unsupported claims in
+  any reply, and scored all 3 unanswerables 0 (including 2 exact correct refusals). Rough judge
+  scores on 20: correctness 0/1/2 = 3/14/3, faithful 12/8. eval-log.md has the details.
+- [ ] 8.6j Your decision: what (if anything) to change about the judge before it's used.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):

@@ -1,0 +1,15 @@
+{"id": "q007", "correctness": 2, "faithful": true}
+{"id": "q008", "correctness": 2, "faithful": true}
+{"id": "q012", "correctness": 2, "faithful": false}
+{"id": "q015", "correctness": 2, "faithful": true}
+{"id": "q018", "correctness": 2, "faithful": true}
+{"id": "q021", "correctness": 1, "faithful": true}
+{"id": "q022", "correctness": 2, "faithful": true}
+{"id": "q024", "correctness": 0, "faithful": false}
+{"id": "q027", "correctness": 2, "faithful": false}
+{"id": "q030", "correctness": 2, "faithful": true}
+{"id": "q034", "correctness": 1, "faithful": true}
+{"id": "q036", "correctness": 1, "faithful": true}
+{"id": "q044", "correctness": 2, "faithful": false}
+{"id": "q046", "correctness": 1, "faithful": false}
+{"id": "q056", "correctness": 2, "faithful": true}

@@ -1,0 +1,45 @@
+{
+ "judge": "llama3.2:3b",
+ "rough": "uncalibrated scores from a small local judge",
+ "n": 20,
+ "errors": {},
+ "all": {
+  "n": 20,
+  "correctness": {
+   "0": 3,
+   "1": 14,
+   "2": 3
+  },
+  "mean_correctness": 1.0,
+  "faithful": {
+   "true": 12,
+   "false": 8
+  }
+ },
+ "answerable": {
+  "n": 17,
+  "correctness": {
+   "0": 0,
+   "1": 14,
+   "2": 3
+  },
+  "mean_correctness": 1.1764705882352942,
+  "faithful": {
+   "true": 12,
+   "false": 5
+  }
+ },
+ "unanswerable": {
+  "n": 3,
+  "correctness": {
+   "0": 3,
+   "1": 0,
+   "2": 0
+  },
+  "mean_correctness": 0.0,
+  "faithful": {
+   "true": 0,
+   "false": 3
+  }
+ }
+}
