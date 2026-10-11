@@ -383,3 +383,59 @@ async def test_the_database_rejects_a_conversation_whose_user_is_in_another_tena
         async with session_scope() as session:
             session.add(Conversation(tenant_id=tenant_b, user_id=user_a, title="wrong"))
             await session.commit()
+
+
+# --- order survives a wall clock that steps back (M8) --------------------------------
+
+
+async def test_a_message_added_after_a_clock_step_still_sorts_after_the_last_one() -> (
+    None
+):
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    tenant, user = await _tenant_user()
+    conversation = await conversation_repository.create_conversation(tenant, user, None)
+    first = await conversation_repository.add_message(
+        tenant, user, conversation.id, role=MessageRole.user, content="q"
+    )
+    assert first is not None
+    ahead = first.created_at + timedelta(
+        hours=1
+    )  # the clock was ahead, then stepped back
+    async with session_scope() as session:
+        await session.execute(
+            update(Message).where(Message.id == first.id).values(created_at=ahead)
+        )
+        await session.commit()
+
+    second = await conversation_repository.add_message(
+        tenant, user, conversation.id, role=MessageRole.assistant, content="a"
+    )
+
+    assert second is not None and second.created_at > ahead
+    history = await conversation_repository.recent_history(
+        tenant, user, conversation.id, limit=10
+    )
+    assert history is not None
+    assert [m.content for m in history] == ["q", "a"]
+
+
+async def test_messages_added_at_once_get_distinct_increasing_timestamps() -> None:
+    import asyncio
+
+    tenant, user = await _tenant_user()
+    conversation = await conversation_repository.create_conversation(tenant, user, None)
+
+    added = await asyncio.gather(
+        *(
+            conversation_repository.add_message(
+                tenant, user, conversation.id, role=MessageRole.user, content=str(i)
+            )
+            for i in range(5)
+        )
+    )
+
+    stamps = sorted(m.created_at for m in added if m is not None)
+    assert len(set(stamps)) == 5

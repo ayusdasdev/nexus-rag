@@ -49,6 +49,15 @@ costs tens of seconds.
 - An LLM rewrite can still add a fact the prompt forbids. Its output is only a retrieval
   query over the caller's own tenant, so the worst case is retrieving the wrong own-tenant
   chunks.
+- **Message order (decided 2026-10-11).** History and the message listing are ordered by
+  `created_at`, which was Postgres `now()`: wall-clock time. On 2026-10-11 the WSL2/Docker
+  clock stepped back about 0.65 s mid-turn, so a turn's question was stored after its own
+  answer. History pairing then dropped the turn, and a follow-up saw no history (a flaky
+  integration failure, reproduced in tests). `add_message` now locks the conversation row
+  and stores `greatest(now(), last message + 1 µs)`, so a conversation's messages sort in
+  the order they were added. You chose this over a new `seq` column, which would have needed
+  a migration and a message-cursor change. Cost: after a backward step `created_at` can run
+  slightly ahead of real time, and posts to one conversation queue on a row lock.
 
 ## Security review follow-ups (2026-10-09)
 Fixed with tests: a fresh 404/401 exception per raise; the LLM rewrite takes an answer slot

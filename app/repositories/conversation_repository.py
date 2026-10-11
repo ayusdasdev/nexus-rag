@@ -5,7 +5,7 @@ functions return None or False for both, so the API answers 404 either way.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
@@ -170,6 +170,9 @@ async def list_messages(
         return [_message(row) for row in result.scalars().all()]
 
 
+_AFTER_LAST_MESSAGE = timedelta(microseconds=1)
+
+
 async def add_message(
     tenant_id: UUID,
     user_id: UUID,
@@ -183,16 +186,36 @@ async def add_message(
     usage: dict[str, Any] | None = None,
     truncated: bool = False,
 ) -> MessageRecord | None:
-    """Append to the caller's conversation. None (and nothing written) if not theirs."""
+    """Append to the caller's conversation. None (and nothing written) if not theirs.
+
+    Messages are ordered by created_at, so it must grow with every message even if the wall
+    clock steps back (seen on WSL2/Docker, M8): the conversation row is locked, and the new
+    message gets now() or 1 microsecond after the conversation's last message, whichever is
+    later. Concurrent posts to one conversation queue on the lock.
+    """
     async with session_scope() as session:
         owned = await session.scalar(
-            select(Conversation.id).where(*_owned(tenant_id, user_id, conversation_id))
+            select(Conversation.id)
+            .where(*_owned(tenant_id, user_id, conversation_id))
+            .with_for_update()
         )
         if owned is None:
             return None
+        last = await session.scalar(
+            select(func.max(Message.created_at)).where(
+                Message.conversation_id == conversation_id,
+                Message.tenant_id == tenant_id,
+            )
+        )
+        created_at = (
+            func.now()
+            if last is None
+            else func.greatest(func.now(), last + _AFTER_LAST_MESSAGE)
+        )
         row = Message(
             conversation_id=conversation_id,
             tenant_id=tenant_id,
+            created_at=created_at,
             role=role,
             content=content,
             sources=sources,

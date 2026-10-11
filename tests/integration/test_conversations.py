@@ -337,3 +337,93 @@ async def test_a_conversation_deleted_mid_request_is_404_not_an_orphan_answer(
 
     assert response.status_code == 404
     assert fake_llm.calls == []
+
+
+# --- a wall clock that steps backwards (M8: the flaky second-turn failure) -----------
+# Seen 2026-10-11 08:57: turn 1's user message got created_at 0.65 s *after* its own
+# answer and after both turn-2 messages (Postgres now() is each transaction's start time,
+# and the WSL2 / Docker clock stepped back). Ordered by created_at, turn 1 came back as
+# (assistant, user), so the pairing dropped it and turn 2 saw no history.
+
+
+def _clock_ahead_while_the_first_question_is_saved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clock step: the first question is stored 1 hour in the future, as if the clock was
+    ahead then and stepped back before the answer was saved."""
+    from sqlalchemy import text
+
+    from app.repositories import conversation_repository
+    from app.repositories.session import session_scope
+
+    original = conversation_repository.add_message
+    stepped: list[uuid.UUID] = []
+
+    async def add_message(*args: Any, **kwargs: Any) -> Any:
+        record = await original(*args, **kwargs)
+        if record is not None and kwargs["role"].value == "user" and not stepped:
+            stepped.append(record.id)
+            async with session_scope() as session:
+                await session.execute(
+                    text(
+                        "update messages set created_at = created_at"
+                        " + interval '1 hour' where id = :id"
+                    ),
+                    {"id": record.id},
+                )
+                await session.commit()
+        return record
+
+    monkeypatch.setattr(conversation_repository, "add_message", add_message)
+
+
+async def test_history_survives_a_clock_step_between_the_turns_messages(
+    client: AsyncClient,
+    new_tenant: NewTenant,
+    fake_llm: FakeLLM,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caller = await new_tenant()
+    conversation_id = await _create(client, caller)
+    url = f"/v1/conversations/{conversation_id}/messages"
+    _clock_ahead_while_the_first_question_is_saved(monkeypatch)
+    await client.post(url, headers=caller.headers, json={"question": Q1})
+
+    second = await client.post(url, headers=caller.headers, json={"question": Q2})
+
+    assert _events(second)[0][1]["rewritten_query"] == f"{Q1} {Q2}"
+    assert [m.role for m in fake_llm.calls[-1]] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+
+
+async def test_messages_are_listed_in_the_order_they_were_added_despite_a_clock_step(
+    client: AsyncClient,
+    new_tenant: NewTenant,
+    fake_llm: FakeLLM,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    caller = await new_tenant()
+    conversation_id = await _create(client, caller)
+    url = f"/v1/conversations/{conversation_id}/messages"
+    _clock_ahead_while_the_first_question_is_saved(monkeypatch)
+    await client.post(url, headers=caller.headers, json={"question": Q1})
+    await client.post(url, headers=caller.headers, json={"question": Q2})
+
+    body = (
+        await client.get(f"/v1/conversations/{conversation_id}", headers=caller.headers)
+    ).json()
+
+    assert [(m["role"], m["content"]) for m in body["messages"]][::2] == [
+        ("user", Q1),
+        ("user", Q2),
+    ]
+    assert [m["role"] for m in body["messages"]] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
