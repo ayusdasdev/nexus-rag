@@ -314,3 +314,33 @@ Headline answer-quality metrics are the deterministic checks plus your hand grad
 - 7/15 are both fully correct (2) and faithful: q007, q008, q015, q018, q022, q030, q056.
 - The 15 were drawn from the seeded judge sample, not chosen to be representative per type.
   Per-type counts of 1-6 are too small to compare types.
+
+## E3-neighbors: E3 + expand=neighbors, retrieval only (hypothesis written before the run)
+
+Date: 2026-10-11. Config: E3 (hybrid, rerank, candidates 40, limit 10) + `expand=neighbors`,
+dev split (48), tag `E3-neighbors`. No generation.
+
+**What is scored.** Before this, the runner scored only each hit's own chunk text, so
+expansion couldn't change any number. From `feat(eval): score the expanded text` on, a hit's
+scored text is `retrieval.expanded_text`: chunk -1, the hit, chunk +1, joined as the answer
+model sees them (`chat._context` uses the same function). E0-E3 had expand=none, so their
+numbers are unchanged.
+
+**By construction:** expansion runs after ranking and only adds text, so the order of hits is
+E3's and recall@k, MRR and nDCG@10 can't drop. Any change is a gold span found in a neighbor
+(or across a chunk boundary). The cost isn't visible in these metrics: each hit gets longer,
+so fewer hits fit the answer budget. I'll measure that as how many of the top 6 (chat's
+limit) fit `max_context_tokens` 2500 when packed the way `build_messages` does
+(approx_tokens = chars/4, best first, skipping one that doesn't fit; headings not counted,
+because hits don't store them), for E3 and E3-neighbors.
+
+**Hypothesis (yours):** helps multi-chunk and straddling answers; little effect elsewhere.
+
+**My specific predictions:**
+- multi-chunk (7): full recall@10 rises from 4/7 to at least 5/7, and MRR rises from 0.401.
+- factoid, paraphrase, exact-token: at most +2 questions each at R@10; R@1 almost unchanged.
+- Overall R@10 34/41 -> 35-37/41; nothing drops (guaranteed, see above).
+- Budget: E3 fits ~6/6 of the top 6 in most questions; with neighbors, a median of 3-4 of 6
+  fit, so a generation run would see fewer distinct sources.
+- Time: 1-3 min (rerank cached, since expansion happens after it); a rerank stage over 1 s
+  on any question means the cache missed, and I stop and tell you.
