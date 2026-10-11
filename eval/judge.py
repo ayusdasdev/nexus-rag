@@ -58,6 +58,22 @@ class AnswerRecord:
     raw_answer: str = ""
 
 
+def answer_record(question: dict[str, Any], answer: dict[str, Any]) -> AnswerRecord:
+    """A dataset question and a stored answer (a results.jsonl "answer"), as one record."""
+    return AnswerRecord(
+        qid=question["id"],
+        question=question["question"],
+        answerable=bool(question["answerable"]),
+        reference_answer=question.get("reference_answer", ""),
+        gold_spans=[g["span"] for g in question["gold"]],
+        answer=answer["text"],
+        cited=answer["cited"],
+        dropped=answer["dropped"],
+        sources=answer["sources"],
+        raw_answer=answer.get("raw_text", ""),
+    )
+
+
 def _ws(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
@@ -264,7 +280,8 @@ def judge_messages(rec: AnswerRecord) -> list[ChatMessage]:
 
 
 async def llm_judge(llm: LLMProvider, rec: AnswerRecord) -> dict[str, Any]:
-    """One call, temperature 0. A failed call or an unreadable reply is an error, not a score."""
+    """One call, temperature 0. A failed call or an unreadable reply is an error, not a score.
+    The reply is kept as raw, so an error or a verdict can be read later."""
     empty: dict[str, Any] = {
         "correctness": None,
         "faithful": None,
@@ -273,12 +290,13 @@ async def llm_judge(llm: LLMProvider, rec: AnswerRecord) -> dict[str, Any]:
     try:
         reply = await llm.complete(judge_messages(rec), max_tokens=300, temperature=0.0)
     except LLMError as exc:
-        return {**empty, "error": f"llm_error:{type(exc).__name__}", "judge": llm.name}
+        error = f"llm_error:{type(exc).__name__}"
+        return {**empty, "error": error, "judge": llm.name, "raw": None}
     try:
         verdict = parse_verdict(reply)
     except ValueError:
-        return {**empty, "error": "unparseable", "judge": llm.name}
-    return {**verdict, "error": None, "judge": llm.name}
+        return {**empty, "error": "unparseable", "judge": llm.name, "raw": reply}
+    return {**verdict, "error": None, "judge": llm.name, "raw": reply}
 
 
 def judge_sample(

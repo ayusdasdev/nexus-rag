@@ -6,8 +6,10 @@ Shows 15 answers of a generation run, one at a time: question, reference, source
 answer. The 15 are drawn (seeded) from the fixed 20-question judge sample, so you can grade
 before the judge has run. You grade correctness (0/1/2) and faithfulness (y/n). Each grade
 is saved to eval/calibration/<run>.grades.jsonl as soon as you give it; q quits and a re-run
-resumes. You see no checks or verdicts. Once the judge has run, a re-run prints how often
-it agrees with you. Your grades are the ground truth; the judge never reads them.
+resumes. You see no checks or verdicts. Once the judge has run (eval/tools/judge_run.py,
+verdicts in the run's judge.jsonl), a re-run prints how often it agrees with you and saves
+it to eval/calibration/<run>.agreement.json. Your grades are the ground truth; the judge
+never reads them.
 """
 
 import argparse
@@ -130,6 +132,16 @@ def calibration_items(
     ]
 
 
+def judge_verdicts(path: Path) -> dict[str, Grade]:
+    """(correctness, faithful) per id from a run's judge.jsonl; an error is (None, None)."""
+    if not path.exists():
+        return {}
+    return {
+        v["id"]: (v["correctness"], v["faithful"])
+        for v in map(json.loads, path.read_text().splitlines())
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     from eval.dataset import DATASETS, load_questions
 
@@ -152,19 +164,15 @@ def main(argv: list[str] | None = None) -> int:
         g["id"]: (g["correctness"], g["faithful"])
         for g in map(json.loads, out.read_text().splitlines())
     }
-    verdicts = {
-        x["id"]: (
-            x["answer"]["verdict"]["correctness"],
-            x["answer"]["verdict"]["faithful"],
-        )
-        for x in lines
-        if x.get("answer") and x["answer"].get("verdict")
-    }
+    verdicts = judge_verdicts(run_dir / "judge.jsonl")
     print(f"{len(human)}/{len(items)} graded, saved in {out.relative_to(ROOT)}")
     if not verdicts:
         print("the judge has not run on this run yet; no agreement to report")
         return 0
-    print(json.dumps(agreement(human, verdicts), indent=1))
+    result = agreement(human, {i: verdicts[i] for i in human if i in verdicts})
+    report = out.with_name(f"{args.run}.agreement.json")
+    report.write_text(json.dumps(result, indent=1) + "\n")
+    print(json.dumps(result, indent=1))
     return 0
 
 

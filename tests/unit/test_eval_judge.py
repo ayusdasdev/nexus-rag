@@ -7,11 +7,12 @@ from collections import Counter
 
 import pytest
 
-from app.providers.llm import FakeLLM
+from app.providers.llm import FakeLLM, LLMUnavailable
 from app.services.chat import REFUSAL
 from eval.dataset import DATASETS, load_questions
 from eval.judge import (
     AnswerRecord,
+    answer_record,
     citation_check,
     deterministic_checks,
     fact_check,
@@ -233,6 +234,7 @@ def test_llm_judge_makes_one_call_with_everything_it_grades() -> None:
         "unsupported_claims": [],
         "error": None,
         "judge": "fake",
+        "raw": GOOD,
     }
     assert len(llm.calls) == 1
     system, user = llm.calls[0]
@@ -252,6 +254,49 @@ def test_an_unparseable_verdict_is_recorded_as_an_error_not_a_score() -> None:
 
     assert verdict["correctness"] is None and verdict["faithful"] is None
     assert verdict["error"] == "unparseable"
+    assert verdict["raw"] == "I think it's fine."
+
+
+def test_a_failed_judge_call_is_an_error_with_no_reply() -> None:
+    class Down(FakeLLM):
+        async def complete(self, *args: object, **kwargs: object) -> str:
+            raise LLMUnavailable("down")
+
+    verdict = asyncio.run(llm_judge(Down([]), _rec()))
+
+    assert verdict["error"] == "llm_error:LLMUnavailable" and verdict["raw"] is None
+
+
+def test_an_answer_record_is_built_from_a_question_and_a_stored_answer() -> None:
+    question = {
+        "id": "q001",
+        "question": "How long?",
+        "answerable": True,
+        "reference_answer": "90 days.",
+        "gold": [{"doc": "a.md", "span": "ninety days"}],
+    }
+    answer = {
+        "text": "Ninety days [1].",
+        "raw_text": "<answer>Ninety days [1].</answer>",
+        "cited": [1],
+        "dropped": [],
+        "sources": ["ninety days"],
+    }
+
+    rec = answer_record(question, answer)
+
+    assert rec == AnswerRecord(
+        qid="q001",
+        question="How long?",
+        answerable=True,
+        reference_answer="90 days.",
+        gold_spans=["ninety days"],
+        answer="Ninety days [1].",
+        cited=[1],
+        dropped=[],
+        sources=["ninety days"],
+        raw_answer="<answer>Ninety days [1].</answer>",
+    )
 
 
 def test_tags_inside_graded_text_cannot_close_the_judges_sections() -> None:

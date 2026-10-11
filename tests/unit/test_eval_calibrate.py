@@ -8,7 +8,13 @@ import pytest
 
 from eval.dataset import DATASETS, load_questions
 from eval.judge import judge_sample
-from eval.tools.calibrate import agreement, calibration_ids, calibration_items, grade
+from eval.tools.calibrate import (
+    agreement,
+    calibration_ids,
+    calibration_items,
+    grade,
+    judge_verdicts,
+)
 
 SPLIT = json.loads((DATASETS / "v1.split.json").read_text())
 
@@ -122,3 +128,25 @@ def test_a_run_missing_a_sampled_answer_is_refused() -> None:
 
     with pytest.raises(SystemExit, match="no answer"):
         calibration_items(load_questions(), SPLIT, lines)
+
+
+def test_verdicts_are_read_from_the_judges_own_file_with_errors_as_none(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "judge.jsonl"
+    path.write_text(
+        json.dumps({"id": "q001", "correctness": 2, "faithful": False, "error": None})
+        + "\n"
+        + json.dumps(
+            {
+                "id": "q002",
+                "correctness": None,
+                "faithful": None,
+                "error": "unparseable",
+            }
+        )
+        + "\n"
+    )
+
+    assert judge_verdicts(path) == {"q001": (2, False), "q002": (None, None)}
+    assert judge_verdicts(tmp_path / "absent.jsonl") == {}

@@ -170,22 +170,9 @@ def _checks(
     """Deterministic answer checks; None without an answer (or when generation failed)."""
     if answer is None or answer["text"] is None:
         return None
-    from eval.judge import AnswerRecord, deterministic_checks
+    from eval.judge import answer_record, deterministic_checks
 
-    return deterministic_checks(
-        AnswerRecord(
-            qid=question["id"],
-            question=question["question"],
-            answerable=bool(question["answerable"]),
-            reference_answer=question.get("reference_answer", ""),
-            gold_spans=[g["span"] for g in question["gold"]],
-            answer=answer["text"],
-            cited=answer["cited"],
-            dropped=answer["dropped"],
-            sources=answer["sources"],
-            raw_answer=answer.get("raw_text", ""),
-        )
-    )
+    return deterministic_checks(answer_record(question, answer))
 
 
 def summarise_generation(lines: Sequence[dict[str, Any]]) -> dict[str, Any]:
