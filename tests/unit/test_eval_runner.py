@@ -296,4 +296,23 @@ def test_state_points_a_run_at_another_tenant_and_is_recorded(
 
     assert seen == [state]
     meta = json.loads((tmp_path / "runs" / "t" / "run.json").read_text())
-    assert (meta["state"], meta["tenant_id"]) == (str(state), "t-200")
+    # Outside the repo only the file name is recorded, never an absolute local path.
+    assert (meta["state"], meta["tenant_id"]) == ("c200.json", "t-200")
+
+
+def test_a_state_file_inside_the_repo_is_recorded_relative_to_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "repo"
+    state = repo / "eval" / "state" / "eval_tenant_c500.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"tenant_id": "t-500", "documents": []}))
+    monkeypatch.setattr(runner, "ROOT", repo)
+
+    _main_with_fake_search(monkeypatch, tmp_path, ["--state", str(state)])
+
+    meta = json.loads((tmp_path / "runs" / "t" / "run.json").read_text())
+    assert meta["state"] == "eval/state/eval_tenant_c500.json"
+    assert not any(isinstance(v, str) and v.startswith("/") for v in meta.values()), (
+        meta
+    )

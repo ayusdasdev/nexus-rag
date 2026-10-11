@@ -322,6 +322,16 @@ async def run_questions(
     return summary
 
 
+def _recorded_path(path: Path) -> str:
+    """How run.json names a file: relative to the repo, or only its name if outside it.
+    Never an absolute local path (it would carry the user's home directory)."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return resolved.name
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -360,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         "git_sha": sha,
         "git_dirty": dirty,
         "generate": args.generate,
-        "state": str(state),
+        "state": _recorded_path(state),
         "tenant_id": json.loads(state.read_text())["tenant_id"],
     }
     ids = select_ids(split[args.split], args.ids, args.split)
