@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     max_upload_mb: int = 25
     # "parent_child" is reserved; selecting it fails the document with a clear message.
     chunk_strategy: Literal["structure", "parent_child"] = "structure"
+    # Chunk size and overlap in embedder tokens (M8 E4 sweep). 500 is the cap: a chunk plus
+    # the special tokens must stay under BGE's 512-token input (510 usable).
+    chunk_max_tokens: int = Field(default=350, ge=64, le=500)
+    chunk_overlap_tokens: int = Field(default=50, ge=0)
     embedder: Literal["bge", "fake"] = "bge"
     fastembed_cache_dir: str = "data/fastembed_cache"
     embed_batch_size: int = 32
@@ -109,6 +113,14 @@ class Settings(BaseSettings):
     rate_limit_login_email_capacity: float = Field(default=5, gt=0)
     rate_limit_login_email_refill_per_second: float = Field(default=1 / 60, ge=0)
     llm_answer_deadline_seconds: float = Field(default=420.0, gt=0)
+
+    @model_validator(mode="after")
+    def _overlap_below_chunk_size(self) -> "Settings":
+        if self.chunk_overlap_tokens >= self.chunk_max_tokens:
+            raise ValueError(
+                "chunk_overlap_tokens must be smaller than chunk_max_tokens"
+            )
+        return self
 
     @model_validator(mode="after")
     def _history_leaves_room_for_sources(self) -> "Settings":

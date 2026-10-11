@@ -62,3 +62,35 @@ def test_conversation_settings_default_to_rule_rewrites_and_a_500_token_history(
 def test_history_must_leave_room_for_sources_in_the_shared_budget() -> None:
     with pytest.raises(ValidationError, match="history_max_tokens"):
         Settings(_env_file=None, max_context_tokens=500, history_max_tokens=500)
+
+
+# --- chunk sizes (M8 E4) -------------------------------------------------------------
+
+
+def test_chunk_size_defaults_are_the_ones_every_ingest_so_far_used() -> None:
+    from app.services.ingestion_pipeline import CHUNK_OVERLAP_TOKENS, MAX_CHUNK_TOKENS
+
+    settings = Settings(_env_file=None)
+
+    assert (settings.chunk_max_tokens, settings.chunk_overlap_tokens) == (350, 50)
+    assert (MAX_CHUNK_TOKENS, CHUNK_OVERLAP_TOKENS) == (350, 50)
+
+
+@pytest.mark.parametrize("size", [200, 500, 64])
+def test_chunk_sizes_inside_the_bounds_are_accepted(size: int) -> None:
+    assert Settings(chunk_max_tokens=size).chunk_max_tokens == size
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"chunk_max_tokens": 501},  # the cap stays under the embedder's 510 tokens
+        {"chunk_max_tokens": 63},
+        {"chunk_max_tokens": 200, "chunk_overlap_tokens": 200},
+        {"chunk_max_tokens": 64, "chunk_overlap_tokens": 100},
+        {"chunk_overlap_tokens": -1},
+    ],
+)
+def test_chunk_sizes_outside_the_bounds_are_refused(fields: dict[str, int]) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**fields)  # type: ignore[arg-type]

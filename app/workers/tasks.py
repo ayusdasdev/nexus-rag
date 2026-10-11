@@ -78,12 +78,24 @@ def process_document(self: Any, document_id: str) -> None:
     _embed_stage(doc_id, embed_claim)
 
 
+def _chunk_sizes() -> dict[str, int]:
+    settings = get_settings()
+    return {
+        "max_tokens": settings.chunk_max_tokens,
+        "overlap": settings.chunk_overlap_tokens,
+    }
+
+
 def _chunk_stage(doc_id: UUID, claimed: ClaimedDocument) -> bool:
     """Returns False when the document failed permanently."""
     path = get_blob_store().path_for(claimed.tenant_id, claimed.sha256)
     try:
         chunks = chunk_document(
-            path, claimed.content_type, _tokenizer(), get_settings().chunk_strategy
+            path,
+            claimed.content_type,
+            _tokenizer(),
+            get_settings().chunk_strategy,
+            **_chunk_sizes(),
         )
     except NoExtractableText:
         _fail(

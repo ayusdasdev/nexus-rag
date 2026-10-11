@@ -150,7 +150,9 @@ async def test_transient_error_retries_three_times_then_marks_failed(
     )
     calls: list[Any] = []
 
-    def flaky(path: Path, content_type: str, tokenizer: Any, strategy: str) -> None:
+    def flaky(
+        path: Path, content_type: str, tokenizer: Any, strategy: str, **sizes: int
+    ) -> None:
         calls.append(path)
         raise TransientError("database temporarily unavailable")
 
@@ -173,7 +175,11 @@ async def test_reserved_parent_child_strategy_fails_with_readable_message(
         tmp_path, monkeypatch, FIXTURES / "nested_headings.md", "text/plain"
     )
     monkeypatch.setattr(
-        tasks, "get_settings", lambda: SimpleNamespace(chunk_strategy="parent_child")
+        tasks,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chunk_strategy="parent_child", chunk_max_tokens=350, chunk_overlap_tokens=50
+        ),
     )
 
     tasks.process_document.apply(args=[str(document_id)])
@@ -192,7 +198,7 @@ async def test_document_already_past_processing_is_not_reprocessed(
     await document_repository.set_status(document_id, DocumentStatus.chunked)
     calls: list[Any] = []
 
-    def record(*args: Any) -> list[Any]:
+    def record(*args: Any, **kwargs: Any) -> list[Any]:
         calls.append(args)
         return []
 
@@ -412,7 +418,12 @@ async def test_heading_path_is_prepended_only_when_flag_is_on(
     monkeypatch.setattr(
         tasks,
         "get_settings",
-        lambda: SimpleNamespace(chunk_strategy="structure", embed_with_heading=True),
+        lambda: SimpleNamespace(
+            chunk_strategy="structure",
+            embed_with_heading=True,
+            chunk_max_tokens=350,
+            chunk_overlap_tokens=50,
+        ),
     )
 
     tasks.process_document.apply(args=[str(document_id)])

@@ -1,5 +1,6 @@
 import uuid
 from itertools import pairwise
+from pathlib import Path
 
 import pytest
 
@@ -190,3 +191,43 @@ def test_cap_accounts_for_special_token_overhead(
             chunk_markdown("some words", tokenizer, max_tokens=max_tokens, overlap=0)
     else:
         chunk_markdown("some words", tokenizer, max_tokens=max_tokens, overlap=0)
+
+
+# --- chunk_document passes the configured sizes through (M8 E4) ----------------------
+
+
+def _document(tmp_path: Path) -> Path:
+    path = tmp_path / "doc.md"
+    paragraphs = [_words(120, prefix=f"p{i}w") for i in range(10)]
+    path.write_text("# Title\n\n" + "\n\n".join(paragraphs) + "\n")
+    return path
+
+
+def test_chunk_document_defaults_to_350_and_50(tmp_path: Path) -> None:
+    from app.services.ingestion_pipeline import chunk_document
+
+    path = _document(tmp_path)
+
+    default = chunk_document(path, "text/plain", TOK, "structure")
+    explicit = chunk_document(
+        path, "text/plain", TOK, "structure", max_tokens=350, overlap=50
+    )
+
+    assert default == explicit
+
+
+def test_chunk_document_uses_the_size_it_is_given(tmp_path: Path) -> None:
+    from app.services.ingestion_pipeline import chunk_document
+
+    path = _document(tmp_path)
+
+    small = chunk_document(
+        path, "text/plain", TOK, "structure", max_tokens=200, overlap=50
+    )
+    large = chunk_document(
+        path, "text/plain", TOK, "structure", max_tokens=500, overlap=50
+    )
+
+    assert max(TOK.count(c.text) for c in small) <= 200
+    assert max(TOK.count(c.text) for c in large) <= 500
+    assert len(small) > len(large)
