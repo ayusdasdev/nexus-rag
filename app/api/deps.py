@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.request_context import set_tenant_id
 from app.core.security import InvalidToken, decode_access_token
 from app.repositories.auth_repository import get_user_by_id
 
@@ -50,6 +51,8 @@ async def get_current_user(
     if user is None:
         raise _credentials_error()
 
+    # The verified tenant, for log lines only; the middleware resets it per request.
+    set_tenant_id(user.tenant_id)
     return CurrentUser(
         id=user.id,
         tenant_id=user.tenant_id,

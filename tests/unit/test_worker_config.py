@@ -17,3 +17,12 @@ def test_process_document_retry_and_ack_policy() -> None:
     assert task.autoretry_for == (TransientError,)
     assert task.soft_time_limit == 900
     assert task.time_limit == 1200
+
+
+def test_the_worker_logs_json_instead_of_celerys_own_format() -> None:
+    from celery.signals import setup_logging
+
+    from app.workers import celery_app as module
+
+    receivers = [ref() for _, ref in setup_logging.receivers]
+    assert module.use_json_logs in receivers

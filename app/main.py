@@ -12,6 +12,8 @@ from app.api.openapi import install_openapi, operation_id
 from app.api.problems import install_problem_handlers
 from app.api.request_id import RequestIdMiddleware
 from app.api.search import router as search_router
+from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.core.request_context import install_log_record_factory
 from app.repositories.session import dispose_engine
 
@@ -24,6 +26,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     install_log_record_factory()
+    configure_logging(get_settings().log_level)
     app = FastAPI(
         title="Nexus RAG",
         version="0.1.0",

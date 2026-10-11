@@ -7,7 +7,13 @@ import logging
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.problems import PROBLEM_JSON, problem_body
-from app.core.request_context import choose_request_id, reset_request_id, set_request_id
+from app.core.request_context import (
+    choose_request_id,
+    reset_request_id,
+    reset_tenant_id,
+    set_request_id,
+    set_tenant_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +35,7 @@ class RequestIdMiddleware:
             decoded = None
         request_id = choose_request_id(decoded)
         token = set_request_id(request_id)
+        tenant_token = set_tenant_id(None)
         started = False
 
         async def send_with_id(message: Message) -> None:
@@ -61,4 +68,5 @@ class RequestIdMiddleware:
             )
             await send_with_id({"type": "http.response.body", "body": body})
         finally:
+            reset_tenant_id(tenant_token)
             reset_request_id(token)

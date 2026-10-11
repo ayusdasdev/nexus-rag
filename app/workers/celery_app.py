@@ -1,6 +1,10 @@
+from typing import Any
+
 from celery import Celery
+from celery.signals import setup_logging
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 
 PROCESS_DOCUMENT_TASK = "process_document"
 
@@ -20,3 +24,10 @@ celery_app.conf.update(
     # that is still running. Default is 3600s.
     broker_transport_options={"visibility_timeout": 7200},
 )
+
+
+@setup_logging.connect  # type: ignore[untyped-decorator]
+def use_json_logs(**_: Any) -> None:
+    """The worker logs the same JSON lines as the API (M9 9.1). Connecting this receiver
+    also stops Celery from installing its own handlers."""
+    configure_logging(_settings.log_level)

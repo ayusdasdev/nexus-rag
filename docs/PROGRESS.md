@@ -423,6 +423,22 @@ Free setup only; ask before any run over 30 minutes.
 
 ## M9: Observability, MCP server, CI/CD, hardening
 
+Your decisions (2026-10-11):
+- tracing uses the standard library only, with no new dependency (OpenTelemetry vocabulary,
+  no SDK);
+- `query_traces` stores the query, the rewritten query and the answer, but never document
+  text (chunk ids and scores only), kept 30 days;
+- `GET /v1/traces/{request_id}` is admin-only, and anyone else gets 404.
+
+Before M9: `ingest_corpus` no longer takes `--password` (`e4555f1`), and `run.json` no longer
+records absolute paths (`ce64389`).
+- [x] 9.1a JSON logs: one object per line (ts, level, logger, message, request_id, tenant_id,
+  plus whitelisted extras such as stage and ms). The tenant is set only after a token is
+  verified and reset per request. Exceptions are logged by type and file:line frames only;
+  never the message or source lines (a test checks a secret in an exception never appears).
+  Uvicorn and the Celery worker use the same format. Worker lines carry no tenant_id: setting
+  it per task risks leaking it between tasks. Every existing log call was audited; none logs
+  document text or prompts.
 - [ ] 9.1 JSON structured logs (request_id, tenant_id; no document content). `span()` tracing
   helper. Migration 4 `query_traces`. `POST /v1/messages/{id}/feedback` and
   `GET /v1/traces/{request_id}` (cross-tenant gives 404).
