@@ -331,6 +331,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--final-holdout", action="store_true")
     parser.add_argument("--set", dest="overrides", action="append", default=[])
     parser.add_argument("--dataset", default="v1")
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=None,
+        help="eval tenant state file (default eval/state/eval_tenant.json)",
+    )
     parser.add_argument("--generate", action="store_true", help="also generate answers")
     parser.add_argument(
         "--ids", help="comma-separated ids within the split (smoke tests)"
@@ -339,8 +345,10 @@ def main(argv: list[str] | None = None) -> int:
     check_split_allowed(args.split, args.final_holdout)
     config = parse_overrides(args.overrides)
 
+    import eval.pipeline
     from eval.dataset import DATASETS, load_questions
-    from eval.pipeline import make_search
+
+    state = args.state or eval.pipeline.STATE
 
     questions = load_questions(args.dataset)
     split = json.loads((DATASETS / f"{args.dataset}.split.json").read_text())
@@ -352,9 +360,11 @@ def main(argv: list[str] | None = None) -> int:
         "git_sha": sha,
         "git_dirty": dirty,
         "generate": args.generate,
+        "state": str(state),
+        "tenant_id": json.loads(state.read_text())["tenant_id"],
     }
     ids = select_ids(split[args.split], args.ids, args.split)
-    search, close = make_search(generate=args.generate)
+    search, close = eval.pipeline.make_search(generate=args.generate, state=state)
 
     async def go() -> dict[str, Any]:
         try:

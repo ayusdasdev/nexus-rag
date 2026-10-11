@@ -139,8 +139,11 @@ def answer_fn_for(
     return make_answerer(build(settings), settings)
 
 
-def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]]:
-    """The real search for the eval tenant. Models load on first use, not at import."""
+def make_search(
+    generate: bool, state: Path = STATE
+) -> tuple[SearchFn, Callable[[], Awaitable[None]]]:
+    """The real search for the eval tenant in state (eval/tools/ingest_corpus.py --state).
+    Models load on first use, not at import."""
     from functools import partial
 
     from app.core.config import get_settings
@@ -153,8 +156,8 @@ def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]
     from eval.rerank_cache import CachingReranker
 
     answer_fn = answer_fn_for(generate, get_settings(), build_llm)
-    state = json.loads(STATE.read_text())
-    doc_names = {UUID(d["id"]): d["file"] for d in state["documents"]}
+    tenant = json.loads(state.read_text())
+    doc_names = {UUID(d["id"]): d["file"] for d in tenant["documents"]}
     retrieve_fn = partial(
         retrieve,
         store=get_vector_store(),
@@ -162,5 +165,5 @@ def make_search(generate: bool) -> tuple[SearchFn, Callable[[], Awaitable[None]]
         fetch_chunks=chunk_repository.fetch_chunks,
         fetch_neighbors=chunk_repository.fetch_neighbors,
     )
-    search = build_search(retrieve_fn, UUID(state["tenant_id"]), doc_names, answer_fn)
+    search = build_search(retrieve_fn, UUID(tenant["tenant_id"]), doc_names, answer_fn)
     return search, dispose_engine

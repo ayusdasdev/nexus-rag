@@ -245,3 +245,55 @@ def test_ids_narrow_a_split_and_cannot_reach_outside_it() -> None:
     assert runner.select_ids(split, None) == split
     with pytest.raises(SystemExit, match="not in the dev split"):
         runner.select_ids(split, "q001,q002", split_name="dev")
+
+
+# --- --state: which eval tenant a run searches (M8 E4) -------------------------------
+
+
+def _main_with_fake_search(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str]
+) -> list[Path]:
+    import eval.pipeline
+
+    seen: list[Path] = []
+
+    def fake_make_search(generate: bool, state: Path = eval.pipeline.STATE) -> Any:
+        seen.append(state)
+
+        async def close() -> None:
+            return None
+
+        return _search([]), close
+
+    monkeypatch.setattr(eval.pipeline, "make_search", fake_make_search)
+    monkeypatch.setattr(runner, "RUNS", tmp_path / "runs")
+    monkeypatch.setattr(runner, "git_info", lambda: ("abc123", False))
+    runner.main(["--tag", "t", "--ids", "q001", *argv])
+    return seen
+
+
+def test_without_state_a_run_searches_the_original_eval_tenant(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import eval.pipeline
+
+    default = tmp_path / "eval_tenant.json"
+    default.write_text(json.dumps({"tenant_id": "t-350", "documents": []}))
+    monkeypatch.setattr(eval.pipeline, "STATE", default)
+
+    assert _main_with_fake_search(monkeypatch, tmp_path, []) == [default]
+    meta = json.loads((tmp_path / "runs" / "t" / "run.json").read_text())
+    assert meta["tenant_id"] == "t-350"
+
+
+def test_state_points_a_run_at_another_tenant_and_is_recorded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    state = tmp_path / "c200.json"
+    state.write_text(json.dumps({"tenant_id": "t-200", "documents": []}))
+
+    seen = _main_with_fake_search(monkeypatch, tmp_path, ["--state", str(state)])
+
+    assert seen == [state]
+    meta = json.loads((tmp_path / "runs" / "t" / "run.json").read_text())
+    assert (meta["state"], meta["tenant_id"]) == (str(state), "t-200")
