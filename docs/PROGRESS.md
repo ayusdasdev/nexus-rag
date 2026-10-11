@@ -350,8 +350,17 @@ Free setup only; ask before any run over 30 minutes.
   `3f081aa` result). Same hit order as E3; R@10 34 -> 36/41, MRR 0.635 -> 0.685; multi-chunk
   full R@10 4 -> 5/7, MRR 0.401 -> 0.548; only q006, q046, q050 moved (all up). Tokens/hit median
   172 -> 425; all top-6 fit 2500 in 25/48 (E3 48/48). 4 s (rerank cached). No generation.
-- [ ] 8.6l Chunk-size sweep: asked you (estimate ~75-90 min for 200 and 500, separate tenants);
-  waiting for your decision.
+- [x] 8.6l E4 approved: sizes 200 and 500, overlap 50, a separate tenant each, no overlap sweep.
+  Step a: `CHUNK_MAX_TOKENS` / `CHUNK_OVERLAP_TOKENS` (defaults 350/50, proven unchanged by
+  tests, `1fef2e5`) and `eval.runner --state` (`6615707`).
+- [x] 8.6m The flaky `make test-int` failure (second turn saw no history) was a real bug: the
+  WSL2/Docker clock stepped back ~0.65 s mid-turn, and messages ordered by wall-clock
+  `created_at` came back as (answer, question). Reproduced with tests, fixed by a monotonic
+  `created_at` under a conversation row lock (your choice; ADR-0009; `76890d9`). One of my new
+  tests first reached the real Ollama model (no `fake_llm`); fixed before the final suites.
+  Final: `make lint` pass, `make test` 641, `make test-int` 358, 0 Ollama models loaded after.
+- [ ] 8.6n E4 hypotheses written in eval-log.md before any run; then 200 and 500, one at a
+  time.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):

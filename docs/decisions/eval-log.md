@@ -386,3 +386,42 @@ Caveats:
 - n = 3 questions moved, so the gain is small and the sample is small.
 - Answer quality with ~2.4x longer sources on llama3.2:3b is unmeasured; no generation was
   run.
+
+## E4: chunk-size sweep, 200 and 500 vs the 350 baseline (hypotheses written before any run)
+
+Date: 2026-10-11. Retrieval only, dev split (48), E3 config (hybrid, rerank, candidates 40,
+expand none, limit 10). Each size is a new eval tenant, ingested with
+`CHUNK_MAX_TOKENS=200|500` and `CHUNK_OVERLAP_TOKENS=50`. The 350 tenant is unchanged, and
+its E3 run is the baseline. Gold labels are text spans, not chunk ids, so the same labels
+are valid for every size.
+
+**Measured baseline (350):** 473 chunks, 74,423 tokens; per chunk min 7, median 132, max 350.
+156 chunks are over 200 tokens and 51 are at 300 or more. Chunking is heading-bounded, so
+most chunks are well under the cap.
+
+**Read with care:** a bigger chunk is an easier recall target (more text that can contain a
+span), and a smaller one a harder target. Recall differences between sizes are partly that,
+not only ranking quality.
+
+**Hypotheses:**
+- **Guide:** a mid size (350) is best; small chunks lose context, large ones blur.
+- **Chunk counts:** 200 splits roughly the 156 chunks over 200, so 620-720 chunks. 500 only
+  changes sections longer than 350, so 430-460 chunks. Under ~40% of chunks change at 200,
+  under ~15% at 500.
+- **Overall R@10 (350: 34/41):** 200 gives 31-34; 500 gives 34-36, since it is the easier
+  target and few chunks change. MRR (350: 0.635): 200 lower (0.55-0.62); 500 about the same
+  (0.62-0.67).
+- **Paraphrase** (350: R@3 8/10, R@10 8/10): 200 hurts. Less surrounding text gives the dense
+  model and the reranker less to match a reworded question against: R@10 6-8/10. 500 is
+  about the same (7-9/10).
+- **Exact-token** (350: R@10 7/7, MRR 0.881): robust at every size, because BM25 finds the
+  literal token. R@10 7/7 at both; MRR at 200 the same or slightly higher (a short chunk
+  around the token scores well on BM25 length normalisation).
+- **Multi-chunk** (350: full R@10 4/7, MRR 0.401): 500 helps, since the spans are more often
+  in one chunk: full R@10 at least 5/7. 200 hurts, since spans spread over more chunks:
+  full R@10 at most 4/7.
+- **Factoid** (350: full R@10 15/17): within ±1 at both sizes.
+- **Time:** ingestion about 6-7 min per size (350 took 350 s). Retrieval is faster than my
+  first estimate: the reranker cache is keyed by text, so every chunk identical to a 350
+  chunk is a cache hit. 500: under ~10 min; 200: about 10-20 min. Anything over 60 min stops
+  the run.
