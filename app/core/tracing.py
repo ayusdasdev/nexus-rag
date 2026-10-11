@@ -28,6 +28,8 @@ class Span:
 class RequestTrace:
     request_id: str | None
     spans: list[Span] = field(default_factory=list)
+    # Structured facts a stage hands to the query trace (e.g. retrieval candidate ids).
+    annotations: dict[str, Any] = field(default_factory=dict)
 
     def stage_ms(self) -> dict[str, float]:
         """Milliseconds per span name, summed when a stage ran more than once."""
@@ -61,6 +63,13 @@ def record(name: str, ms: float, **attributes: Any) -> None:
     if trace is not None:
         trace.spans.append(Span(name=name, ms=ms, attributes=attributes))
     logger.debug("span %s", name, extra={"stage": name, "ms": round(ms, 3)})
+
+
+def annotate(key: str, value: Any) -> None:
+    """Attach a structured fact to the current trace, if there is one."""
+    trace = _current.get()
+    if trace is not None:
+        trace.annotations[key] = value
 
 
 @contextmanager

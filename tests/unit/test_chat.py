@@ -492,7 +492,11 @@ async def test_an_answer_records_first_token_and_generate_spans() -> None:
 
     names = [s.name for s in trace.spans]
     assert names == ["llm_first_token", "generate"]
-    assert trace.spans[1].attributes == {"model": "fake", "sources": 1}
+    # Token counts are estimates (chars / 4, as the context budget counts them).
+    attributes = trace.spans[1].attributes
+    assert (attributes["model"], attributes["sources"]) == ("fake", 1)
+    assert attributes["completion_tokens"] == 4  # "Two hours [1]." is 14 chars
+    assert attributes["prompt_tokens"] > 0
 
 
 @pytest.mark.asyncio

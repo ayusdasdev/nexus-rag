@@ -427,3 +427,35 @@ async def test_messages_are_listed_in_the_order_they_were_added_despite_a_clock_
         "user",
         "assistant",
     ]
+
+
+# --- conversation turns are traced and linked to their message (M9 9.1) -------------
+
+
+async def test_a_conversation_turn_is_traced_and_linked_to_its_answer(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    from app.repositories import trace_repository
+
+    caller = await new_tenant()
+    conversation_id = await _create(client, caller)
+    url = f"/v1/conversations/{conversation_id}/messages"
+    await client.post(url, headers=caller.headers, json={"question": Q1})
+
+    second = await client.post(url, headers=caller.headers, json={"question": Q2})
+
+    trace = await trace_repository.get_by_request_id(
+        caller.tenant_id, second.headers["x-request-id"]
+    )
+    body = (
+        await client.get(f"/v1/conversations/{conversation_id}", headers=caller.headers)
+    ).json()
+    assert trace is not None
+    assert (trace.endpoint, trace.query, trace.rewritten_query) == (
+        "conversation",
+        Q2,
+        f"{Q1} {Q2}",
+    )
+    assert str(trace.message_id) == body["messages"][-1]["id"]
+    assert trace.user_id == caller.user_id
+    assert "rewrite" in trace.latency_ms

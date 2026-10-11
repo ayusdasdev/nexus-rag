@@ -1,6 +1,6 @@
 import asyncio
 from functools import partial
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -19,7 +19,7 @@ from app.core.config import Settings, get_settings
 from app.models.conversation import MessageRole
 from app.providers.llm import LLMProvider
 from app.providers.reranker import Reranker, get_reranker
-from app.repositories import conversation_repository
+from app.repositories import conversation_repository, trace_repository
 from app.repositories.conversation_repository import ConversationRecord, MessageRecord
 from app.repositories.vector_store import VectorStore, get_vector_store
 from app.schemas.chat import SSE_EXAMPLE
@@ -33,6 +33,7 @@ from app.schemas.conversations import (
 )
 from app.services.chat import answer_events
 from app.services.conversations import history_turns, persisted_events
+from app.services.query_trace import traced_answer
 from app.services.rewriting import rewrite_query, trim_history
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -258,16 +259,33 @@ async def post_message(
         history=history,
         rewritten_query=query,
     )
-    save = partial(
-        conversation_repository.add_message,
+    answer_ids: list[UUID] = []
+
+    async def save(**fields: Any) -> MessageRecord | None:
+        record = await conversation_repository.add_message(
+            tenant_id, user.id, conversation_id, role=MessageRole.assistant, **fields
+        )
+        if record is not None:
+            answer_ids.append(record.id)
+        return record
+
+    model = str(getattr(llm, "model", llm.name))
+    write = partial(
+        trace_repository.add_trace,
         tenant_id,
         user.id,
-        conversation_id,
-        role=MessageRole.assistant,
+        retention_days=settings.trace_retention_days,
     )
-    model = str(getattr(llm, "model", llm.name))
     return sse_response(
-        persisted_events(events, save=save, model=model, rewritten_query=query)
+        traced_answer(
+            persisted_events(events, save=save, model=model, rewritten_query=query),
+            write=write,
+            endpoint="conversation",
+            query=request.question,
+            rewritten_query=query,
+            model=model,
+            message_id=lambda: answer_ids[0] if answer_ids else None,
+        )
     )
 
 

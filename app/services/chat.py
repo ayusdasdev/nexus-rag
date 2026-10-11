@@ -25,6 +25,7 @@ from app.providers.llm import (
 from app.services.generation import (
     ContextChunk,
     HistoryTurn,
+    approx_tokens,
     build_messages,
     find_external_links,
     parse_citations,
@@ -192,6 +193,11 @@ async def answer_events(
             yield _GENERIC_ERROR
             return
         finally:
+            # Estimated like the context budget (chars / 4); providers don't report usage.
+            span_attributes["prompt_tokens"] = sum(
+                approx_tokens(m.content) for m in built.messages
+            )
+            span_attributes["completion_tokens"] = approx_tokens("".join(parts))
             record(
                 "generate", (time.perf_counter() - started) * 1000, **span_attributes
             )

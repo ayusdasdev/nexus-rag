@@ -454,6 +454,14 @@ records absolute paths (`ce64389`).
     feedback only by the trace's own user.
   - **Retention:** writing a trace purges that tenant's traces older than
     `TRACE_RETENTION_DAYS` (default 30), and `purge_expired` does every tenant.
+- [x] 9.1d Every `/v1/chat` answer and every conversation turn writes one query trace,
+  however the stream ends: done, error, or the client leaving (`disconnected`).
+  - **What's stored:** request id, query, rewritten query, answer, error code; top-20 candidate
+    ids, scores and ranks per retrieval stage plus the final items (never chunk text, which a
+    test checks); latency per span; model.
+  - **Tokens:** estimated (chars / 4, as the context budget counts).
+  - **Conversation link:** a turn's trace points at its saved assistant message.
+  - **Safety:** a failed trace write is logged by type and never breaks the answer.
 - [ ] 9.1 JSON structured logs (request_id, tenant_id; no document content). `span()` tracing
   helper. Migration 4 `query_traces`. `POST /v1/messages/{id}/feedback` and
   `GET /v1/traces/{request_id}` (cross-tenant gives 404).

@@ -1,19 +1,20 @@
 import asyncio
 from collections.abc import AsyncIterator
-from functools import lru_cache
+from functools import lru_cache, partial
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_tenant_id
+from app.api.deps import CurrentUser, get_current_user, get_tenant_id
 from app.api.rate_limit import limit_chat
 from app.api.retrieval_errors import retrieval_errors
 from app.core.config import Settings, get_settings
+from app.core.tracing import annotate
 from app.providers.llm import LLMNotConfigured, LLMProvider
 from app.providers.llm_factory import build_llm
 from app.providers.reranker import Reranker, get_reranker
-from app.repositories import chunk_repository
+from app.repositories import chunk_repository, trace_repository
 from app.repositories.vector_store import VectorStore, get_vector_store
 from app.schemas.chat import (
     SSE_EXAMPLE,
@@ -25,6 +26,7 @@ from app.schemas.chat import (
     TokenEvent,
 )
 from app.services.chat import ChatEvent, answer_events, format_sse
+from app.services.query_trace import retrieval_summary, traced_answer
 from app.services.retrieval import RetrievedChunk, retrieve
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -86,7 +88,9 @@ async def retrieve_for_answer(
             use_sparse=mode in ("sparse", "hybrid"),
             use_rerank=settings.rerank,
             expand=settings.expand,
+            trace=True,
         )
+    annotate("retrieval", retrieval_summary(result))
     return result.items
 
 
@@ -129,6 +133,7 @@ def sse_response(events: AsyncIterator[ChatEvent]) -> StreamingResponse:
 async def chat(
     request: ChatRequest,
     tenant_id: UUID = Depends(get_tenant_id),  # noqa: B008 - FastAPI DI pattern
+    user: CurrentUser = Depends(get_current_user),  # noqa: B008 - FastAPI DI pattern
     store: VectorStore = Depends(get_vector_store),  # noqa: B008 - FastAPI DI pattern
     reranker: Reranker = Depends(get_reranker),  # noqa: B008 - FastAPI DI pattern
     llm: LLMProvider = Depends(get_chat_llm),  # noqa: B008 - FastAPI DI pattern
@@ -163,4 +168,19 @@ async def chat(
         deadline_seconds=settings.llm_answer_deadline_seconds,
         slots=slots,
     )
-    return sse_response(events)
+    write = partial(
+        trace_repository.add_trace,
+        tenant_id,
+        user.id,
+        retention_days=settings.trace_retention_days,
+    )
+    return sse_response(
+        traced_answer(
+            events,
+            write=write,
+            endpoint="chat",
+            query=request.question,
+            rewritten_query=None,
+            model=str(getattr(llm, "model", llm.name)),
+        )
+    )

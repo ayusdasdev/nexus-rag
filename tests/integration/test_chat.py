@@ -337,3 +337,62 @@ async def test_chat_restricted_to_another_tenants_document_refuses(
     assert events[0] == ("sources", {"sources": []})
     assert events[-1][1]["refused"] is True
     assert llm.calls == []
+
+
+# --- every answer leaves a query trace (M9 9.1) -------------------------------------
+
+
+async def test_a_chat_answer_is_traced_under_its_request_id_without_document_text(
+    client: AsyncClient, store: VectorStore, llm: FakeLLM
+) -> None:
+    from app.repositories import trace_repository
+
+    tenant = await _tenant(client)
+    ids = await _seed(client, store, tenant)
+
+    response = await client.post(
+        CHAT_URL,
+        headers={**tenant["headers"], "X-Request-ID": f"trace-{uuid.uuid4().hex}"},
+        json={"question": QUESTION},
+    )
+
+    trace = await trace_repository.get_by_request_id(
+        tenant["tenant_id"], response.headers["x-request-id"]
+    )
+    assert trace is not None
+    assert (trace.endpoint, trace.query, trace.answer, trace.error) == (
+        "chat",
+        QUESTION,
+        "Charging takes two hours [1].",
+        None,
+    )
+    final = [c["chunk_id"] for c in trace.stages["final"]]
+    assert final and set(final) <= set(ids)
+    assert {"dense", "sparse", "fused", "rerank"} <= set(trace.stages)
+    stored = json.dumps(trace.stages)
+    assert not any(text in stored for text in TEXTS)
+    assert {"embed_query", "rerank", "generate"} <= set(trace.latency_ms)
+    assert trace.prompt_tokens and trace.completion_tokens
+    assert trace.model == "fake" and trace.message_id is None
+
+
+async def test_a_refusal_is_traced_too(
+    client: AsyncClient, store: VectorStore, llm: FakeLLM
+) -> None:
+    from app.repositories import trace_repository
+
+    tenant = await _tenant(client)
+
+    response = await client.post(
+        CHAT_URL, headers=tenant["headers"], json={"question": QUESTION}
+    )
+
+    trace = await trace_repository.get_by_request_id(
+        tenant["tenant_id"], response.headers["x-request-id"]
+    )
+    assert trace is not None
+    assert (trace.answer, trace.stages["final"], trace.prompt_tokens) == (
+        REFUSAL,
+        [],
+        None,
+    )
