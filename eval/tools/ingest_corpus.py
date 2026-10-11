@@ -2,7 +2,8 @@
 
     uv run python -m eval.tools.ingest_corpus --email eval@nexus.local [--signup]
 
-Password: --password, or $EVAL_PASSWORD, or a prompt. Writes eval/state/eval_tenant.json
+Password: $EVAL_PASSWORD, or a prompt; never a command-line argument, which `ps` and shell
+history would show. Writes eval/state/eval_tenant.json
 (tenant id, document ids and final statuses; local to this database, so not committed).
 Exits 1 if any document didn't become ready.
 """
@@ -28,7 +29,6 @@ def main(
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", default="http://localhost:8000")
     parser.add_argument("--email", required=True)
-    parser.add_argument("--password", default=os.environ.get("EVAL_PASSWORD"))
     parser.add_argument(
         "--signup", action="store_true", help="create the eval tenant first"
     )
@@ -36,7 +36,9 @@ def main(
     parser.add_argument("--poll", type=float, default=3.0)
     parser.add_argument("--timeout", type=float, default=1800.0)
     args = parser.parse_args(argv)
-    password = args.password or getpass.getpass("Eval tenant password: ")
+    password = os.environ.get("EVAL_PASSWORD") or getpass.getpass(
+        "Eval tenant password: "
+    )
 
     manifest = json.loads((CORPUS / "manifest.json").read_text())
     with httpx.Client(
