@@ -371,8 +371,10 @@ Free setup only; ask before any run over 30 minutes.
 
   200 loses early ranks in paraphrase and multi-chunk; 500 ties 350 within noise. Conclusion:
   keep 350. Hypothesis checks and moved questions are in eval-log.md.
-- [ ] 8.6o Your decision on the final configuration (my recommendation is in the report);
-  then the hold-out run, only when you say so.
+- [x] 8.6o Final configuration, your choice from dev only (ADR-0012): hybrid, candidates 40,
+  rerank on (E3), expand none, chunks 350/50, chat limit 6. These are the app defaults.
+- [ ] 8.6p The one hold-out run (retrieval only, `--final-holdout`, ADR-0012 config); its
+  numbers are final.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
