@@ -425,3 +425,87 @@ not only ranking quality.
   first estimate: the reranker cache is keyed by text, so every chunk identical to a 350
   chunk is a cache hit. 500: under ~10 min; 200: about 10-20 min. Anything over 60 min stops
   the run.
+
+### E4 result (measured), dev split, 41 answerable + 7 unanswerable
+
+**Runs** (all E3 config: hybrid, rerank, candidates 40, expand none, limit 10; clean tree):
+
+| size | tenant / tag | chunks | tokens | median / max per chunk | ingest (22/22 ready) | retrieval work time |
+|---|---|---|---|---|---|---|
+| 200 | `eval-c200`, `E4-c200` | 664 | 81,301 | 127 / 200 | 4 min 47 s | 10 min 51 s (wall = work, no alerts) |
+| 350 | baseline, `E3-hybrid-rerank` | 473 | 74,423 | 132 / 350 | 350 s (M8 8.1) | 28 min 50 s |
+| 500 | `eval-c500`, `E4-c500` | 424 | 72,643 | 121 / 500 | 6 min 59 s | **19.0 min** of measured work |
+
+- The 500 run's wall time (12:48:20-13:41:10, ~53 min) includes **about 34 min of machine
+  sleep**. The monitor saw a 2,088 s clock jump; per-question times, measured on a clock that
+  doesn't count suspend, add up to 19.0 min. Use 19.0 min for any timing comparison. Scores
+  are deterministic and unaffected. Accepted as is (your decision, no re-run).
+- Retrieval times aren't comparable across sizes. The 350 run was fully uncached, while the
+  200 and 500 runs reused cached rerank scores for every chunk text identical to a 350 chunk
+  (303/664 at 200, 347/424 at 500). The CPU rerank cost per query is 350's (median 37.7 s).
+- Ingestion used a local API with `RATE_LIMIT_UPLOAD_CAPACITY=50` (env only), so 22 uploads
+  weren't throttled.
+
+**Overall** (raw counts of questions with full recall; MRR and nDCG over 41):
+
+| size | R@1 | R@3 | R@5 | R@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| 200 | 18/41 | 24/41 | 30/41 | 34/41 | 0.596 | 0.681 |
+| 350 | 20/41 | 27/41 | 31/41 | 34/41 | 0.635 | 0.706 |
+| 500 | 20/41 | 26/41 | 30/41 | 34/41 | 0.638 | 0.704 |
+
+**Per type** (R@1 / R@3 / R@5 / R@10, MRR):
+
+| type | 200 | 350 | 500 |
+|---|---|---|---|
+| factoid (17) | 9/12/15/16, 0.669 | 10/12/14/15, 0.680 | 11/12/13/15, 0.709 |
+| paraphrase (10) | 3/6/8/8, 0.445 | 4/8/8/8, 0.550 | 3/8/8/8, 0.500 |
+| exact-token (7) | 6/6/6/7, 0.881 | 6/6/6/7, 0.881 | 6/6/7/7, 0.893 |
+| multi-chunk (7) | 0/0/1/3, 0.349 | 0/1/3/4, 0.401 | 0/0/2/4, 0.406 |
+
+**Questions that moved** (first-hit rank, R@3, R@10; vs 350):
+- 350 -> 200, 12 moved:
+  - **up (4):** q005 rank 5->4, q006 not found->8 (R@10 0->1), q015 6->4, q021 5->4. All
+    factoid.
+  - **down (8):** q018 1->2, q024 3->4 (R@3 lost), q025 1->3, q027 2->3, q033 3->5 (R@3 lost),
+    q045 3->5 (R@3 0.5->0), q047 3->7 (R@3 1->0, R@10 1->0.5), q050 7->10 (R@10 0.67->0.33).
+    That is all 4 paraphrase movers and all 3 multi-chunk movers.
+- 350 -> 500, 12 moved:
+  - **up (6):** q003 2->1, q005 5->4, q033 3->2, q034 6->4, q043 6->5, q046 3->2.
+  - **down (6):** q015 6->7, q021 5->6, q025 1->3, q045 3->4 (R@3 0.5->0), q047 3->4 (R@3
+    1->0), q050 R@10 0.67->0.33.
+  - Most moves are one rank.
+
+**Hypotheses vs result:**
+
+| hypothesis (written before) | measured | verdict |
+|---|---|---|
+| Guide: mid size (350) best | 350 beats 200 on R@1 (+2), R@3 (+3), MRR (+0.039); 350 and 500 tie (R@3 27 vs 26, MRR 0.635 vs 0.638) | **right vs 200, inconclusive vs 500** |
+| Chunks at 200: 620-720 | 664 | right |
+| Chunks at 500: 430-460 | 424 | wrong (slightly fewer) |
+| Under ~40% of chunks change at 200, under ~15% at 500 | 54% new texts at 200 (361/664), 18% at 500 (77/424) | wrong (both higher) |
+| Overall R@10: 200 31-34, 500 34-36 | 34 and 34 | right (both at the edge) |
+| MRR: 200 0.55-0.62, 500 0.62-0.67 | 0.596, 0.638 | right |
+| Paraphrase: 200 hurts (R@10 6-8), 500 about the same (7-9) | R@10 8 / 8 / 8; at 200 R@3 8->6 and MRR 0.550->0.445; 500 R@3 8, MRR 0.500 | right (R@10 unchanged, harm shows at R@3/MRR) |
+| Exact-token: R@10 7/7 at both, MRR at 200 same or higher | 7/7 at all sizes; MRR 0.881 / 0.881 / 0.893 | right |
+| Multi-chunk: 500 full R@10 >= 5/7 | 4/7 | **wrong** (no gain) |
+| Multi-chunk: 200 full R@10 <= 4/7 | 3/7 | right |
+| Factoid within ±1 | 16 and 15 (350: 15) | right |
+| Ingest about 6-7 min per size | 4 min 47 s, 6 min 59 s | half right (200 faster) |
+| Retrieval: 500 under ~10 min, 200 10-20 min | 19.0 min, 10 min 51 s | 500 wrong, 200 right |
+
+**Caveats:**
+- **Easier targets.** A bigger chunk holds more text, so it is an easier target for span
+  recall. Even so, 500 doesn't beat 350 at any k, and 200 (the harder target) ties 350 at
+  R@10.
+- **Noise.** With 41 answerable questions, one question is 2.4 points of recall. Differences
+  of 1-2 questions (all R@10 and R@5 differences here, 350 vs 500 everywhere) are noise. The
+  clearest signal is 200's loss at R@1/R@3/MRR, concentrated in paraphrase and multi-chunk
+  (7 of its 8 down-moves), and even that is only 2-3 questions.
+- **Size of the change.** Most chunks don't change with size: chunking is heading-bounded,
+  and the median chunk is ~120-130 tokens at every size.
+- **Scope.** One corpus, one split, one run per size; retrieval only, nothing about answer
+  quality.
+
+**Conclusion (measured, dev only):** keep 350. 200 is worse on early ranks (paraphrase and
+multi-chunk), and 500 is indistinguishable from 350.

@@ -359,8 +359,20 @@ Free setup only; ask before any run over 30 minutes.
   `created_at` under a conversation row lock (your choice; ADR-0009; `76890d9`). One of my new
   tests first reached the real Ollama model (no `fake_llm`); fixed before the final suites.
   Final: `make lint` pass, `make test` 641, `make test-int` 358, 0 Ollama models loaded after.
-- [ ] 8.6n E4 hypotheses written in eval-log.md before any run; then 200 and 500, one at a
-  time.
+- [x] 8.6n E4 hypotheses written before any run (`aae89e4`). Then one size at a time, each in
+  its own tenant (API and worker up only for ingestion):
+  - 200: 664 chunks, ingest 4 min 47 s, retrieval 10 min 51 s.
+  - 500: 424 chunks, ingest 6 min 59 s, retrieval 19.0 min of work. Its ~53 min wall time
+    includes ~34 min of machine sleep; accepted as is.
+
+  Dev, 41 answerable (200 / 350 / 500):
+  - R@1 18 / 20 / 20, R@3 24 / 27 / 26, R@10 34 / 34 / 34;
+  - MRR 0.596 / 0.635 / 0.638.
+
+  200 loses early ranks in paraphrase and multi-chunk; 500 ties 350 within noise. Conclusion:
+  keep 350. Hypothesis checks and moved questions are in eval-log.md.
+- [ ] 8.6o Your decision on the final configuration (my recommendation is in the report);
+  then the hold-out run, only when you say so.
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
