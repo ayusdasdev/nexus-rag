@@ -462,9 +462,16 @@ records absolute paths (`ce64389`).
   - **Tokens:** estimated (chars / 4, as the context budget counts).
   - **Conversation link:** a turn's trace points at its saved assistant message.
   - **Safety:** a failed trace write is logged by type and never breaks the answer.
-- [ ] 9.1 JSON structured logs (request_id, tenant_id; no document content). `span()` tracing
-  helper. Migration 4 `query_traces`. `POST /v1/messages/{id}/feedback` and
-  `GET /v1/traces/{request_id}` (cross-tenant gives 404).
+- [x] 9.1e Two endpoints:
+  - `POST /v1/messages/{id}/feedback` (-1 or 1, own assistant messages only, otherwise 404);
+  - `GET /v1/traces/{request_id}` (admins of the tenant only; members and other tenants get
+    the same 404 as a missing trace; request id validated like X-Request-ID).
+
+  Both have a schema, example and tests (happy path, 401, 404s, 422s). ADR-0013 records the
+  observability decisions.
+
+  Known gap: the global trace purge (`purge_expired`) isn't scheduled (no cron or beat), so a
+  tenant with no new answers keeps expired traces until it runs.
 - [ ] 9.2 `app/mcp_server/` (official MCP SDK): read-only `search_documents` and
   `list_documents`, no tenant argument, thin adapter over the REST API, capped output, stderr-only
   logs. Subprocess JSON-RPC tests and a test that no schema has tenant_id. New dep: `mcp`.
