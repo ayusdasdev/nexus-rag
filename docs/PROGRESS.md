@@ -445,6 +445,15 @@ records absolute paths (`ce64389`).
   - every retrieval stage (the existing stage timings feed it);
   - the follow-up rewrite (`rewrite`, with its mode);
   - generation (`llm_first_token`, and `generate` with model and source count).
+- [x] 9.1c `query_traces` table (migration `c29cb20a16dd`, which up/down/up cleanly) and
+  `trace_repository`.
+  - **Ownership and deletion:** a composite FK ties the user to the tenant; a cascade from
+    the conversation message means deleting a conversation deletes its traces.
+  - **Contents:** stages hold ids, scores and ranks only; `est_cost` is null on the free stack.
+  - **Reads and feedback:** reads are tenant-scoped (a reused request id gives the newest);
+    feedback only by the trace's own user.
+  - **Retention:** writing a trace purges that tenant's traces older than
+    `TRACE_RETENTION_DAYS` (default 30), and `purge_expired` does every tenant.
 - [ ] 9.1 JSON structured logs (request_id, tenant_id; no document content). `span()` tracing
   helper. Migration 4 `query_traces`. `POST /v1/messages/{id}/feedback` and
   `GET /v1/traces/{request_id}` (cross-tenant gives 404).

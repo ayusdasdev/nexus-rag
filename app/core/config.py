@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # the special tokens must stay under BGE's 512-token input (510 usable).
     chunk_max_tokens: int = Field(default=350, ge=64, le=500)
     chunk_overlap_tokens: int = Field(default=50, ge=0)
+    # Query traces hold users' questions and answers: kept this long (M9, your choice).
+    trace_retention_days: int = Field(default=30, ge=1, le=365)
     embedder: Literal["bge", "fake"] = "bge"
     fastembed_cache_dir: str = "data/fastembed_cache"
     embed_batch_size: int = 32
