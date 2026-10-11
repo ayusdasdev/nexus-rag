@@ -257,7 +257,7 @@ dependency).
   **479 passed**, `make test-int` **285 passed**, no 401, nothing flaky. Two new cosmetic
   warnings: sync tests in asyncio-marked modules, as in `test_isolation.py`.
 
-## M8: Evaluation and tuning
+## M8: Evaluation and tuning (closed 2026-10-11)
 
 Your decisions (2026-10-10): corpus = docs/guide.pdf + this repo's ADRs and Markdown docs +
 sample_docs 01-05, frozen under eval/corpus/ (PROGRESS.md left out: it repeats the ADRs, so gold
@@ -298,9 +298,10 @@ Free setup only; ask before any run over 30 minutes.
   runner seed, git sha + dirty flag, times. Rerank score cache in `eval/state/` (`079cc57`).
   Calls `retrieve()` in-process for the eval tenant (an HTTP run would be paced by the search
   rate limit). Tested with fakes only.
-- [ ] 8.5b Migration 3 (`eval_runs`, `eval_results`), `/v1/eval/*` endpoints, `nexus eval run`:
-  not started (after the experiments you asked for first).
-- [ ] 8.5 `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
+- [-] 8.5b Migration 3 (`eval_runs`, `eval_results`), `/v1/eval/*` endpoints, `nexus eval run`:
+  deferred to Later (your decision, 2026-10-11).
+- [-] 8.5 `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent:
+  deferred to Later.
 - [x] 8.6a E0-E2 on dev (`44bd4d0`, eval-log.md): Recall@10 dense 31/41, sparse 25/41,
   hybrid 34/41; MRR 0.532 / 0.546 / 0.628. Paraphrase weakest everywhere (hybrid 6/10).
 - [x] 8.6b E3 hybrid + rerank on dev (`09de946`, 28 min 50 s): R@10 34/41 (E2 34/41), R@1 20/41
@@ -381,20 +382,44 @@ Free setup only; ask before any run over 30 minutes.
   credited to where they were found: message order, a flaky test-int in M8; the refund stub,
   test-int at the M8 start; JWT leeway, M4 integration tests, so not the evaluation. The
   evaluation's own finds are listed separately.
-- [ ] M8 items still open from the guide: migration 3 + `/v1/eval/*` + `nexus eval run`;
-  `run-eval` command, `eval-report` skill, analyst subagent; failure buckets A-G (8.7);
-  parent-child chunking (E9); the M8 security review. Your call which of these close M8.
+- [x] 8.6r M8 security review (security-reviewer subagent on `8a08713..HEAD`): no critical,
+  high or medium findings, so nothing to fix. Low and info items were listed for you:
+  - 422 refunds leave invalid requests unmetered (not a bypass of the chat cost limit);
+  - committed `run.json` files hold the eval tenant id, and the hold-out one an absolute
+    local path;
+  - `ingest_corpus --password` is visible in `ps`;
+  - the eval "Ollama only" guard doesn't pin `OLLAMA_URL` to loopback;
+  - the lock relies on READ COMMITTED (info);
+  - a 64-token minimum chunk raises the embed cost (info).
+
+  One reported low (a stray leading space in `_strip_leftover_tags`) was checked and is not
+  a bug: `text[-1:0]` is `""`. The hold-out refusal run was skipped (your decision).
+- [x] 8.7 Failure analysis on dev (`docs/decisions/failure-analysis.md`), using debug traces
+  re-run in 20 s from the rerank cache, with no code change. 26 of 48 dev questions fail:
+  A 0, B 0, C 0, D 8, E 14, F 4, G 0. Top fix recommended, not applied: a quote-then-cite
+  grounding prompt for E. Runner-up: weighted RRF for D (5 of 8 are dense-only hits sunk by
+  RRF).
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):
   `make lint` pass, `make test` 545 passed, `make test-int` 354 passed.
-- [ ] 8.6 Experiments E0-E3 and the chunk-size sweep at minimum (E4-E10 as time allows), each
+- [x] 8.6 Experiments E0-E3 and the chunk-size sweep at minimum (E4-E10 as time allows), each
   with its hypothesis written first in `docs/decisions/eval-log.md`. Include the 4.7
   hypothesis: plain RRF hurts paraphrases when the sparse list is short and the dense list
   covers the whole tenant (try weighted RRF, and `CANDIDATES` well below the corpus size).
-- [ ] 8.6 Parent-child chunking (enables `EXPAND=parent`, E9).
-- [ ] 8.7 Failure buckets A-G, fix the largest bucket, re-run, one ADR per decision. Only
-  measured numbers.
+  Done: E0-E4 plus E3-neighbors. E5-E10 not run; E5 and E9 are deferred to Later.
+- [-] 8.6 Parent-child chunking (enables `EXPAND=parent`, E9): deferred to Later.
+- [x] 8.7 Failure buckets A-G: classified (above). Applying and re-measuring the top fix is your
+  call (needs a ~100 min dev generation run).
+
+## Later (deferred from M8, 2026-10-11)
+
+- [ ] Migration 3 (`eval_runs`, `eval_results`), `/v1/eval/*` endpoints, `nexus eval run`.
+- [ ] `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
+- [ ] Parent-child chunking (E9).
+- [ ] Overlap sweep (E5).
+- [ ] The 8.7 top fix (quote-then-cite prompt) and the runner-up (weighted RRF), each measured on
+  dev. The hold-out is spent for v1; any new final check needs a dataset v2.
 
 ## M9: Observability, MCP server, CI/CD, hardening
 
