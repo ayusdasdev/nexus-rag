@@ -373,8 +373,11 @@ Free setup only; ask before any run over 30 minutes.
   keep 350. Hypothesis checks and moved questions are in eval-log.md.
 - [x] 8.6o Final configuration, your choice from dev only (ADR-0012): hybrid, candidates 40,
   rerank on (E3), expand none, chunks 350/50, chat limit 6. These are the app defaults.
-- [ ] 8.6p The one hold-out run (retrieval only, `--final-holdout`, ADR-0012 config); its
-  numbers are final.
+- [x] 8.6p The one hold-out run (retrieval only, `--final-holdout`, ADR-0012 config), 7 min 7 s,
+  no alerts. Final, not tuned on: R@1 5/10, R@3 8/10, R@5 9/10, R@10 9/10, MRR 0.670,
+  nDCG@10 0.732. Dev E3: 20/41, 27/41, 31/41, 34/41, 0.635, 0.706. Not worse; within noise.
+  q051 (multi-chunk) missed. Hold-out refusal accuracy: not run (optional; your call).
+- [ ] 8.6q M8 summary in README.md (measured numbers only).
 - `make test-int` first failed with 37 failures (output kept, not retried): every 422 path
   got a 500 because the integration rate-limit stub had no `refund()` since `639b968`; test-int
   had last run one commit before it. Deterministic, not the old 401. Stub fixed (`bdcf7f9`):

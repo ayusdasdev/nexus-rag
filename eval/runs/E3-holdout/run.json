@@ -1,0 +1,34 @@
+{
+ "dataset": "v1",
+ "split": "holdout",
+ "split_seed": 20261010,
+ "git_sha": "e480f179c54b9dfd386ed8bac16e32e2c07197bc",
+ "git_dirty": false,
+ "generate": false,
+ "state": "/home/ayusd/projects/nexus-rag/eval/state/eval_tenant.json",
+ "tenant_id": "95e3270d-a0dc-4d06-80c8-9bfed69486c3",
+ "config": {
+  "mode": "hybrid",
+  "rerank": true,
+  "candidates": 40,
+  "expand": "none",
+  "limit": 10
+ },
+ "runner_seed": 0,
+ "question_ids": [
+  "q002",
+  "q009",
+  "q011",
+  "q013",
+  "q026",
+  "q032",
+  "q037",
+  "q039",
+  "q048",
+  "q051",
+  "q054",
+  "q060"
+ ],
+ "started_at": "2026-10-11T16:26:02.468370+00:00",
+ "finished_at": "2026-10-11T16:33:09.210394+00:00"
+}

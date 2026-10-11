@@ -509,3 +509,31 @@ not only ranking quality.
 
 **Conclusion (measured, dev only):** keep 350. 200 is worse on early ranks (paraphrase and
 multi-chunk), and 500 is indistinguishable from 350.
+
+## Hold-out: the one final run (retrieval only), FINAL, not tuned on
+
+Date: 2026-10-11, 16:26:02-16:33:09 UTC (7 min 7 s; estimated 8-10 min; per-question median
+36.3 s, max 56.7 s, rerank uncached). Tag `E3-holdout`, `--final-holdout`, ADR-0012
+configuration exactly: hybrid, rerank, candidates 40, expand none, limit 10; chunks 350/50 on
+the original eval tenant. Clean tree (`e480f17`); no alerts (min available memory 5,072 MB,
+no clock jump). The 12 hold-out ids, 10 answerable, match `v1.split.json`.
+
+| | R@1 | R@3 | R@5 | R@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| **hold-out (10 answerable)** | **5/10** | **8/10** | **9/10** | **9/10** | **0.670** | **0.732** |
+| dev E3 (41 answerable) | 20/41 | 27/41 | 31/41 | 34/41 | 0.635 | 0.706 |
+
+**The hold-out is not worse than dev.** It is about the same or slightly better at every k:
+R@3 80% vs 66%, R@10 90% vs 83%. With 10 questions, one question is 10 points, so this is
+within noise. It is no evidence that the configuration is better than dev says, only that it
+didn't collapse on unseen questions.
+
+Individual cases, not rates (n = 1-4 per type):
+- factoid: q002, q011, q013 at rank 1; q009 at rank 5.
+- paraphrase: q026 and q032 at rank 2.
+- exact-token: q037 and q039 at rank 1.
+- multi-chunk: q048 has both spans by rank 3 (first at rank 2); **q051 not found in the top 10
+  at all**.
+- unanswerable: q054 and q060 (retrieval only, no refusal scored).
+
+Nothing was tuned, re-run or changed after these numbers. They are final for dataset v1.
