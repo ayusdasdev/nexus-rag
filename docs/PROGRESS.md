@@ -421,7 +421,7 @@ Free setup only; ask before any run over 30 minutes.
 - [ ] The 8.7 top fix (quote-then-cite prompt) and the runner-up (weighted RRF), each measured on
   dev. The hold-out is spent for v1; any new final check needs a dataset v2.
 
-## M9: Observability, MCP server, CI/CD, hardening
+## M9: Observability, MCP server, CI/CD, hardening (closed 2026-10-12)
 
 Your decisions (2026-10-11):
 - tracing uses the standard library only, with no new dependency (OpenTelemetry vocabulary,
@@ -558,7 +558,27 @@ with read-only, tenant-bound API keys.
   its proving test (each reference checked against the repo), and the known gaps.
 - [ ] 9.5 (guide text) README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
   (controls with file:line and the proving test).
-- [ ] security-reviewer subagent on the M9 diff.
+- [x] M9 security review (security-reviewer subagent on `756f623..HEAD`, focused on the MCP
+  server, API keys and trace data): no critical, high or medium findings, so no fix was
+  required. Low and info items, for you:
+  1. `list_documents` returns filenames as plain text outside any data framing (prompt
+     injection through a filename).
+  2. The MCP server puts `document_id` from the API into a path without validating it as a
+     UUID (only matters against a malicious server).
+  3. `load_config` gives a traceback on a malformed URL, and accepts userinfo in it.
+  4. Any `nxk_`-shaped bearer triggers a DB lookup before the rate limit applies.
+  5. Key requests share their creator's rate-limit bucket.
+  6. There is no cap on keys per tenant.
+  7. A member can plant a trace under a known request id; an admin lookup gets the newest
+     one.
+  8. `purge_expired` is unscheduled (already a known gap).
+  9. `QueryTrace`'s docstring says no document text is stored, but answers can quote it.
+  10. The pre-M9 rate-limiter warning logs exception text.
+  11. `create_conversation` could use `FOR NO KEY UPDATE`.
+  12. Compose publishes postgres, redis and qdrant on all interfaces with the dev password.
+
+  One reported item was checked and is wrong: overlap < chunk size IS validated
+  (`config.py:120`, tested).
 
 ## M10: Advanced RAG lab (at least two builds behind flags, evaluated)
 
