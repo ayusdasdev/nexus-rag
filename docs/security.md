@@ -75,7 +75,7 @@ its own services (all local), and anything in a client that calls the API.
 | Exceptions are logged by type and `file:line` frames only, never the message or source lines | `app/core/logging.py:54` | `tests/unit/test_logging.py` (a secret raised in an exception never reaches the log) |
 | DB errors never carry SQL parameters into logs | `app/repositories/session.py:10` (`hide_parameters=True`) | `tests/integration/test_sql_logging.py:32`, `:40` |
 | 500s are RFC 9457 problems with a request id and no stack trace | `app/api/request_id.py`, `app/api/problems.py` | `tests/unit/test_problem_details.py` |
-| Query traces: no chunk text (ids, scores and ranks only); admin-only reads; others get 404 | `app/api/traces.py:73`, `app/services/query_trace.py` | `tests/integration/test_chat.py` (no document text in stages), `tests/integration/test_traces.py` |
+| Query traces store retrieval without chunk text (ids, scores and ranks only); the stored answer can quote documents; admin-only reads; others get 404 | `app/api/traces.py:73`, `app/services/query_trace.py` | `tests/integration/test_chat.py` (no document text in stages), `tests/integration/test_traces.py` |
 | Traces are deleted with their conversation message and kept 30 days | `app/repositories/trace_repository.py:68` (purge on write), FK cascade | `tests/integration/test_trace_repository.py` |
 | Feedback only on your own answers | `app/repositories/trace_repository.py` (`set_feedback`) | `tests/integration/test_traces.py` |
 

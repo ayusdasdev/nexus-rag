@@ -25,9 +25,9 @@ from app.models.base import Base
 class QueryTrace(Base):
     """One chat or conversation answer, reconstructable after the fact (M9 9.1).
 
-    Tenant data: the question and the answer are stored, and document text never is (stages
-    hold chunk ids, scores and ranks only). Kept TRACE_RETENTION_DAYS; deleted with the
-    conversation message it belongs to.
+    Tenant data: the question and the answer are stored, and the answer can quote document
+    text. Retrieval is stored without text: stages hold chunk ids, scores and ranks only.
+    Kept TRACE_RETENTION_DAYS; deleted with the conversation message it belongs to.
     """
 
     __tablename__ = "query_traces"
