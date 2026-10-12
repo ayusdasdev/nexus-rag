@@ -578,3 +578,50 @@ rank 1, fused 27), q049, q061.
 - **Decision rule, fixed now:** keep a weight in the final configuration only if E3 plus that
   weight beats E3 by at least 2 questions at R@3 or R@10 with no type losing more than 1.
   Otherwise keep 1.0: the default stays, and "didn't help" is recorded.
+
+### M10-1 result (measured), dev only
+
+Runs 2026-10-12 15:28-15:32 UTC, clean tree (`bddaca6`), boot time unchanged, min available
+memory 5,975 MB. Times:
+- E2 runs: 6-7 s each;
+- E3 w1.5: 3 min 4 s (new reranker pairs only);
+- E3 w2.0: 7 s (every pair already cached by the w1.5 run).
+
+| dev, 41 answerable | R@1 | R@3 | R@5 | R@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| **E3 w1.0 (baseline)** | 20 | 27 | 31 | 34 | 0.635 | 0.706 |
+| E3 w1.5 | 20 | 27 | 32 | 35 | 0.639 | 0.714 |
+| E3 w2.0 | 20 | 27 | 32 | 35 | 0.639 | 0.714 |
+| E2 w1.0 (diagnostic) | 17 | 28 | 30 | 34 | 0.628 | 0.692 |
+| E2 w1.5 | 17 | 26 | 31 | 34 | 0.623 | 0.688 |
+| E2 w2.0 | 17 | 25 | 31 | 34 | 0.627 | 0.686 |
+
+**Per type, R@3 / R@10 / MRR:**
+- **E3:** identical at both weights except factoid (R@10 15 -> 16, MRR 0.680 -> 0.689).
+  Paraphrase stays 8/8/0.550, exact-token 6/7/0.881, multi-chunk 1/4/0.401.
+- **E2 at 2.0:** paraphrase MRR 0.325 -> 0.365, but R@3 4 -> 3; exact-token MRR 0.905 ->
+  0.833; factoid R@3 15 -> 13.
+
+**Questions that moved:**
+- **E3, both weights:** 2. q006 went from not found to rank 9 (R@10 0 -> 1), q015 from 6 to
+  5.
+- **E2 at 2.0:** 11, mostly by one rank, with ups and downs in every type. The 5 target cases
+  (q029, q031, q044, q049, q061) didn't move into the top 10 at either weight, in E2 or E3.
+
+**Hypotheses vs result:**
+- E3 within ±1 question of E3 at every k: **right** (R@5 and R@10 each +1).
+- None of the 5 dense-only cases gets into the top 6: **right** (none moved).
+- Exact-token stays 7/7 at R@10 in E3: **right**.
+- E2 at 2.0 puts q044 span 2 in the top 10: **wrong** (it didn't move).
+- E2 paraphrase R@10 +1 or +2: **wrong** (6 -> 6; only MRR rose, 0.325 -> 0.365).
+- E2 exact-token MRR may drop: **right** at 2.0 (0.905 -> 0.833).
+- Time, E3 5-20 min each: **wrong**, faster (3 min 4 s and 7 s, thanks to the cache).
+
+**Decision, by the rule fixed beforehand: keep `RRF_DENSE_WEIGHT=1.0`.** E3 gained 1 question
+at R@10, below the required 2, so the default is unchanged; the setting stays available.
+Weighted fusion can't fix the ranking failures while the reranker decides the final order
+and itself ranks those golds low; it mostly reshuffles E2. The next lever for bucket D is the
+reranker (or the candidates it sees), not fusion.
+
+**Dev-only caveat:** dev has been used for every choice so far. One question is 2.4 points,
+so +1 at R@5 and R@10 is noise.
