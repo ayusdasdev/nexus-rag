@@ -1,0 +1,24 @@
+# Only what the image needs is sent to the build. Secrets, data, models, eval state and
+# local tooling never reach it (M9 9.4).
+.git/
+.github/
+.venv/
+venv/
+.env
+.env.*
+data/
+eval/
+eval/state/
+tests/
+docs/
+scripts/
+**/__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.claude/
+.idea/
+.vscode/
+*.sqlite3

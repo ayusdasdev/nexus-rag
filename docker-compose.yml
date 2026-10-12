@@ -39,6 +39,79 @@ services:
       timeout: 5s
       retries: 10
 
+  # The application (M9 9.4, ADR-0015): opt-in with `docker compose --profile app up`.
+  # Config comes from .env plus the container addresses below; secrets stay in .env.
+  migrate:
+    profiles: ["app"]
+    build: .
+    image: nexus-rag:local
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - path: .env
+        required: false
+    environment: &app-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus}@postgres:5432/${POSTGRES_DB:-nexus}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      # Ollama runs on the host (make sure it listens beyond 127.0.0.1 if needed).
+      OLLAMA_URL: http://host.docker.internal:11434
+      FASTEMBED_CACHE_DIR: /models/fastembed
+      HF_HOME: /models/huggingface
+      UPLOAD_DIR: /app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  api:
+    profiles: ["app"]
+    image: nexus-rag:local
+    env_file:
+      - path: .env
+        required: false
+    environment: *app-env
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Models are never baked into the image: the host's caches, read-only
+    # (fill them once with `make fetch-models`).
+    volumes: &app-volumes
+      - ./data/fastembed_cache:/models/fastembed:ro
+      - ${HF_CACHE_HOST:-~/.cache/huggingface}:/models/huggingface:ro
+      - uploads:/app/data/uploads
+    depends_on: &app-depends
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    stop_grace_period: 40s
+
+  worker:
+    profiles: ["app"]
+    image: nexus-rag:local
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+    env_file:
+      - path: .env
+        required: false
+    environment: *app-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes: *app-volumes
+    depends_on: *app-depends
+    # The image's HEALTHCHECK probes the API; the worker has no HTTP port.
+    healthcheck:
+      disable: true
+    stop_grace_period: 60s
+
 volumes:
   postgres_data:
   qdrant_data:
+  uploads:

@@ -1,10 +1,19 @@
-.PHONY: up down dev worker test test-int lint migrate fetch-models sample-docs openapi
+.PHONY: up down dev worker test test-int lint migrate fetch-models sample-docs openapi app-up app-down
 
 up:
 	docker compose up -d
 
 down:
 	docker compose down
+
+# The containerised app (M9 9.4, ADR-0015). app-down stops only the app services:
+# `docker compose --profile app down` would also remove postgres, redis and qdrant.
+app-up:
+	docker compose --profile app up -d --build
+
+app-down:
+	docker compose --profile app stop api worker migrate
+	docker compose --profile app rm -f api worker migrate
 
 dev:
 	uv run uvicorn app.main:app --reload
