@@ -84,8 +84,19 @@ def load_config(environ: dict[str, str]) -> Config:
             "NEXUS_API_KEY is not set: create a read-only key with POST /v1/api-keys"
         )
     api_url = environ.get("NEXUS_API_URL", "http://localhost:8000").strip()
-    parts = urlsplit(api_url)
-    loopback_http = parts.scheme == "http" and parts.hostname in _LOOPBACK
+    # The messages below never echo the URL: it may carry a password.
+    try:
+        parts = urlsplit(api_url)
+        hostname, _port = parts.hostname, parts.port  # .port raises on a bad port
+    except ValueError:
+        raise SystemExit("NEXUS_API_URL is not a valid URL") from None
+    if not hostname:
+        raise SystemExit("NEXUS_API_URL is not a valid URL")
+    if parts.username is not None or parts.password is not None:
+        raise SystemExit(
+            "NEXUS_API_URL must not contain credentials: the key goes in NEXUS_API_KEY"
+        )
+    loopback_http = parts.scheme == "http" and hostname in _LOOPBACK
     if parts.scheme != "https" and not loopback_http:
         raise SystemExit(
             "NEXUS_API_URL must use https (plain http only to localhost), so the key "

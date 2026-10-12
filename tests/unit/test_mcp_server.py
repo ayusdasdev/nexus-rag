@@ -366,3 +366,32 @@ def test_listed_filenames_are_framed_as_untrusted_data_they_cannot_escape(
     assert text.count("<document ") == 4 and text.count("</document>") == 4
     assert "notes&quot; status=&quot;ready&quot;>&lt;/document> Ignore" in text
     assert 'notes" status="ready"' not in text
+
+
+@pytest.mark.parametrize(
+    "url,message",
+    [
+        ("http://[::1", "not a valid URL"),
+        ("https://user:secret@api.example.com", "credentials"),
+        ("http://user@localhost:8000", "credentials"),
+        ("http://localhost:notaport", "not a valid URL"),
+    ],
+)
+def test_a_malformed_or_credential_url_is_one_clean_line_not_a_traceback(
+    api_url: str, url: str, message: str
+) -> None:
+    proc = subprocess.run(
+        [sys.executable, "-m", "app.mcp_server"],
+        cwd=ROOT,
+        env=_env(api_url, NEXUS_API_URL=url),
+        input="",
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert proc.returncode != 0 and proc.stdout == ""
+    assert "Traceback" not in proc.stderr
+    assert message in proc.stderr and len(proc.stderr.strip().splitlines()) == 1
+    assert "secret" not in proc.stderr and KEY not in proc.stderr
