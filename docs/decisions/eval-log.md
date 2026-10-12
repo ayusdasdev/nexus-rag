@@ -625,3 +625,67 @@ reranker (or the candidates it sees), not fusion.
 
 **Dev-only caveat:** dev has been used for every choice so far. One question is 2.4 points,
 so +1 at R@5 and R@10 is noise.
+
+## M10-2: the quote-then-cite answer prompt (hypothesis written before the run)
+
+Date: 2026-10-12. Dev split only (48 questions; the v1 hold-out is spent). Generation with
+llama3.2:3b on Ollama, no Anthropic. Tag `M10-quote`.
+
+**Configuration:** E3 retrieval exactly as ADR-0012 (hybrid, rerank, candidates 40, expand
+none, limit 6; `RRF_DENSE_WEIGHT` stays 1.0 after M10-1), with
+`ANSWER_STYLE=quote_then_cite` (`app/prompts/rag_system_quote.md`). The default stays
+`cite`, and tests prove it renders the M5 prompt unchanged. The new prompt keeps ADR-0007's
+rules verbatim (also tested) and changes only the refusal wording ("no document contains a
+sentence that answers") and the answer form:
+
+    Quote: "<the answering sentence, copied exactly>" [N]
+    Answer: <one or two sentences, [N] after each claim>
+
+**Why** (failure analysis): context use is the largest bucket (14 of 26), plus hallucination
+and refusal (4). In 8 of the 14 context-use cases the answer cites a non-gold source while the
+gold source is in the prompt.
+
+**Baseline:** E3-gen, re-scored with the current checks and cleanup
+(`eval/runs/E3-gen/rescore.json`):
+- **Answered:** 40, of which 15 cite a gold source and 6 are uncited; 4 have malformed
+  citations.
+- **Refusals (7 unanswerable):** 4 correct, 2 near, 1 missed (the bare "[6]"); 1 false
+  refusal on the 41 answerable.
+- **Citations:** 40 valid / 0 invalid.
+- **Facts:** all found in 7 of 23 checkable answers, mean share 0.49.
+- **Speed:** generation median 120 s, max 230 s.
+
+**Measurement rules, fixed now:**
+- The same deterministic checks as the baseline.
+- **Facts on the Answer: part only:** the quote is copied from a document, so it can lift
+  the fact count by copying alone. Facts are reported both on the whole answer and on the
+  text after "Answer:" (the whole answer if there is no such line).
+- **Format compliance:** the share of answered questions with both a "Quote:" line and an
+  "Answer:" line.
+
+**Predictions:**
+- **Cites a gold source:** 15/40 -> 20-26/40.
+- **Uncited answers:** 6 -> 0-2. **Bare-citation answers:** (q040 "[5]", q053 "[6]") 2 -> 0.
+- **Refusals:** correct 4/7 -> 4-6/7; near 2 -> 0-1; missed 1 -> 0-1. **False refusals:**
+  1 -> 1-3, since the stricter "no sentence answers" rule may refuse more.
+- **Facts all found (23 checkable):** 7 -> 7-11 on the whole answer, 6-10 on the Answer: part.
+- **Format compliance:** at least 80% of answered questions. A 3B model may not follow the
+  format; if it falls below 50%, that is the main finding.
+- **Latency:** median 120 s -> 130-170 s; the first token (about 107 s) dominates and the
+  quote adds output.
+
+**Decision rule, fixed now:** make `quote_then_cite` the default only if all three hold:
+- cites-gold reaches at least 19/40 (+4);
+- correct refusals stay at least 4/7, and false refusals at most 2;
+- facts all-found doesn't drop on the Answer: part.
+
+Otherwise keep `cite`, and record why.
+
+**How it runs** (your conditions):
+- **Batches:** three batches of 16 dev ids under one tag, so the run is resumable with one
+  line written per question. `ollama stop` and at least 6 GB available before each batch,
+  then a final call without `--ids` for the summary.
+- **Monitor:** progress, memory and clock. Stop and tell you on less than 1.5 GB available, a
+  single answer over 5 minutes, or signs of sleep.
+- **Time:** estimated 105-135 min. Retrieval is cached from E3-gen, so this is generation
+  only.
