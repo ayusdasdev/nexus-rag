@@ -757,3 +757,55 @@ use a monotonic clock and are unaffected.
 
 **Dev-only caveat:** dev has been used for every choice so far, and n = 7 for refusals
 (one question is 14 points).
+
+## M10-3: refusal-first quote-then-cite (hypothesis written before the run)
+
+Date: 2026-10-12. Dev split only (48 questions), llama3.2:3b on Ollama, no Anthropic. Tag
+`M10-quote-rf`. The retrieval is the same as M10-2 (ADR-0012, `RRF_DENSE_WEIGHT` 1.0).
+
+**The change:** `ANSWER_STYLE=quote_refusal_first`
+(`app/prompts/rag_system_quote_refusal_first.md`). Rule 1 now asks for the refusal decision
+first: if no document answers, reply with exactly the refusal sentence, which sits alone on
+its own line, and "a refusal has no Quote line, no Answer line and no other text". Rule 2
+(Quote:/Answer:) applies only otherwise. Rules 3-6, the ADR-0007 rules, are word for word
+those of `rag_system.md` (tested). The default stays `cite` (tested). The app is unchanged:
+no stripping of `Quote:` before the refusal check, so the run measures the prompt alone.
+
+**Why:** M10-2 showed the gain in grounding (cites-gold 15 -> 21, uncited and malformed 0)
+and the loss in refusals: 0/7 exact, because the model wrote a Quote: line for every
+question, refusals included (q061 "Quote: ... Answer: I can't answer ...").
+
+**Baselines:**
+- E3-gen re-scored (`cite`): refusals 4/7 correct, 2 near, 1 missed; 1 false refusal of 41;
+  cites-gold 15/40; uncited 6; malformed 4.
+- M10-quote (`quote_then_cite`): refusals 0/7 correct, 4 near, 3 missed; 0 false refusals;
+  cites-gold 21/41; uncited 0; malformed 0.
+
+**Decision rule (yours, fixed now):** `quote_refusal_first` wins only if all of these hold;
+otherwise `cite` stays the default:
+- exact correct refusals at least 4 of 7;
+- false refusals do not increase: at most 1, E3-gen's count;
+- answers citing a gold source at least 20/41;
+- uncited and malformed answers stay near 0, fixed now as at most 2 each.
+
+**Predictions:**
+- **Exact correct refusals:** 0 -> 2-4/7. I expect this rule to be the one that decides,
+  and more likely to fail than pass. In M10-2, q055, q057 and q059 used an irrelevant quote
+  as an answer. A 3B model choosing the format before it judges relevance won't be fixed by
+  order alone. q057 ("no SLA defined") is likely still answered.
+- **Near-refusals:** 4 -> 1-3. Refusal-like answers should become exact more often.
+- **False refusals:** 0-2. Refusal-first may make the model quicker to refuse.
+- **Cites a gold source:** 18-22/41, about the same as M10-2. Grounding comes from the
+  quote, which still applies to answers.
+- **Uncited:** 0-1. **Malformed:** 0-1.
+- **Format compliance** (answers with Quote: and Answer:): at least 90%.
+- **Facts all found** on the Answer: part (24 checkable): 4-7.
+- **Generation median:** 120-135 s; refusals are short.
+
+**How it runs** (your conditions, as in M10-2): three batches of 16, with `ollama stop` and at
+least 6 GB available before each batch, then a summary call. A monitor watches progress,
+memory and the clock. It stops and tells you on less than 1.5 GB available, a single answer
+over 5 minutes, or signs of sleep. One line is written per question.
+
+**Dev-only caveat:** n = 7 for refusals (one question is 14 points), and dev has been used for
+every choice so far.
