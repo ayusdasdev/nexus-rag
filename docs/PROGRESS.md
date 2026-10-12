@@ -551,7 +551,12 @@ with read-only, tenant-bound API keys.
 - [ ] 9.4 (guide text) Multi-stage Dockerfile (non-root, pinned base, HEALTHCHECK, model cache as a
   volume), `.dockerignore`, compose `app` profile. Pulling a base image is a download, so I'll
   ask first.
-- [ ] 9.5 README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
+- [x] 9.5 README rewritten from the repo: pitch, architecture, run (local and containers),
+  60-second CLI demo, MCP, trace debugging, the M8 evaluation (unchanged), the ADR table,
+  tenant isolation and measured limitations. Only verified facts; one TODO (fresh-clone
+  `app-up`). `docs/security.md` covers the threat model, every control with `file:line` and
+  its proving test (each reference checked against the repo), and the known gaps.
+- [ ] 9.5 (guide text) README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
   (controls with file:line and the proving test).
 - [ ] security-reviewer subagent on the M9 diff.
 

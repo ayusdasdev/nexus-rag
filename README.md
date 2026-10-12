@@ -1,13 +1,96 @@
 # Nexus RAG
 
-Multi-tenant document Q&A API (RAG). Backend only.
+A multi-tenant document Q&A API, backend only. Each tenant uploads documents (PDF, HTML,
+Markdown, text) and gets back cited answers from its own documents only. It does hybrid
+retrieval (BGE dense + BM25 sparse, RRF fusion, a cross-encoder reranker), streams answers
+over SSE with citations checked against what was retrieved, and keeps multi-turn
+conversations with query rewriting.
+- **Operations:** an evaluation harness with a locked dataset, JSON logs and per-answer query
+  traces, and a read-only MCP server so agents can use it as a tool.
+- **Stack:** FastAPI, async SQLAlchemy + Postgres, Qdrant, Celery + Redis.
+- **Free and local:** fastembed models and Ollama (llama3.2:3b), on CPU. Anthropic is an
+  optional provider behind the same interface.
 
-## Licence
+## Architecture
 
-This project uses `pymupdf4llm`, which depends on PyMuPDF licensed under AGPL-3.0. Anyone who
-interacts with a modified version of this service over a network must be offered its source
-code. See [ADR-0001](docs/decisions/0001-pdf-parser-agpl-licence.md) for the decision and its
-revisit conditions.
+```text
+ clients: nexus CLI, curl, MCP server (read-only key)
+                     |  HTTPS / bearer token or API key
+                     v
+ FastAPI app/api/  -- thin routers: auth, rate limits, problem+json, request ids, SSE
+        |
+        v
+ app/services/     -- retrieval (dense + sparse -> RRF -> rerank), chat and citations,
+        |             conversations and rewriting, query traces
+        v
+ app/repositories/ -- the only place for SQL and Qdrant; every call scoped by tenant
+     |        |
+ Postgres   Qdrant (one collection, a tenant filter on every query)
+     ^
+ Celery worker (Redis broker): parse -> chunk (350 tokens) -> embed -> upsert
+ app/providers/    -- embeddings, reranker and LLM behind Protocols (fakes in tests)
+```
+
+- Layer rules are enforced by `.importlinter`, run by `make lint`.
+- The tenant always comes from the verified token, never from a request
+  ([security.md](docs/security.md)).
+
+## Run it
+
+You need Docker, uv, and Ollama with `llama3.2:3b` (for answers only; search works without
+it).
+
+```bash
+cp .env.example .env        # local defaults; add JWT_SECRET=... before any non-local use
+make up                     # postgres, redis, qdrant
+make fetch-models           # BGE, BM25, reranker and tokenizer into ./data (~1.3 GB, once)
+make migrate
+make dev                    # API on http://localhost:8000 (OpenAPI at /docs)
+make worker                 # in another terminal: ingestion
+```
+
+**Or run the app in containers** (ADR-0015):
+- `make app-up` builds the image and starts `migrate`, `api` and `worker` against the same
+  infrastructure, with the model caches mounted read-only. `make app-down` stops only those.
+- Verified in this repo on 2026-10-12. TODO: not yet verified from a fresh clone.
+
+**Tests:**
+- `make lint` (ruff, mypy --strict, import contracts);
+- `make test` (695 unit tests, fakes only);
+- `make test-int` (411 integration tests against the local services).
+
+## A 60-second demo (CLI)
+
+The `nexus` CLI ships with the package (ADR-0010). It has no signup command, so create a
+tenant with `POST /v1/auth/signup` first.
+
+```bash
+nexus --api-url http://localhost:8000 login --email you@example.com --password-stdin
+nexus upload guide.pdf --wait           # ready when the worker has chunked and embedded it
+nexus docs
+nexus search "how long are readings kept"
+nexus ask "How long are readings kept?" # streams a cited answer from your documents
+nexus history
+```
+
+A real, timed run of these commands is in [docs/cli-demo.md](docs/cli-demo.md).
+
+## Use it from an agent (MCP)
+
+`python -m app.mcp_server` exposes `search_documents` and `list_documents` over stdio. It
+uses a read-only, tenant-bound API key; there is no tenant argument. Setup, Claude Code
+registration and a real verification run are in [docs/mcp.md](docs/mcp.md).
+
+## Debug an answer
+
+Every chat answer and conversation turn writes a query trace:
+- the question and rewritten query;
+- candidate ids and scores per retrieval stage, never document text;
+- latency per stage, model and answer.
+
+An admin can fetch it with `GET /v1/traces/{X-Request-ID}`. Users rate their answers with
+`POST /v1/messages/{id}/feedback`. Logs are JSON lines with `request_id` and `tenant_id`
+([ADR-0013](docs/decisions/0013-observability-logs-and-query-traces.md)).
 
 ## Evaluation (M8): measured results
 
@@ -86,3 +169,62 @@ llama3.2:3b judge was compared with 15 hand grades:
   - a fact check that ignored number words and counted `[2]` as the number 2;
   - a refusal check that missed paraphrased refusals;
   - a runner that couldn't measure `expand=neighbors`.
+
+## Design decisions
+
+| ADR | decision |
+|---|---|
+| [0001](docs/decisions/0001-pdf-parser-agpl-licence.md) | pymupdf4llm for PDFs (AGPL) |
+| [0002](docs/decisions/0002-embedding-stage.md) | the embedding stage, fastembed models and delete ordering |
+| [0003](docs/decisions/0003-retrieval-switches-and-fusion.md) | retrieval switches, standalone RRF and neighbor expansion |
+| [0004](docs/decisions/0004-search-returns-only-ready-documents.md) | search returns only ready documents |
+| [0005](docs/decisions/0005-search-debug-is-admin-only.md) | search debug is admin-only |
+| [0006](docs/decisions/0006-jwt-clock-skew-leeway.md) | 5 s JWT clock-skew leeway |
+| [0007](docs/decisions/0007-prompt-injection-defence.md) | prompt-injection defence in four layers |
+| [0008](docs/decisions/0008-chat-sse-event-schema.md) | the chat SSE event schema |
+| [0009](docs/decisions/0009-conversation-memory-and-query-rewriting.md) | conversation memory, rewriting, ownership and ordering |
+| [0010](docs/decisions/0010-api-conventions-and-rate-limiting.md) | API conventions, rate limiting and the CLI |
+| [0011](docs/decisions/0011-llm-judge-failed-calibration.md) | the 3B LLM judge failed calibration and isn't used |
+| [0012](docs/decisions/0012-final-retrieval-configuration.md) | the final retrieval configuration |
+| [0013](docs/decisions/0013-observability-logs-and-query-traces.md) | JSON logs, request traces and query traces |
+| [0014](docs/decisions/0014-mcp-server-and-read-only-api-keys.md) | the MCP server and read-only API keys |
+| [0015](docs/decisions/0015-container-image-and-compose-profile.md) | the container image and compose profile |
+
+Dependencies and why each was added: [dependencies.md](docs/decisions/dependencies.md).
+
+## Tenant isolation
+
+The tenant comes only from the verified token. Every repository query and every Qdrant call
+is scoped by it, and composite foreign keys tie owners to their tenant.
+
+The tests for this:
+- cross-tenant search, reads, chunks and deletes;
+- conversation IDOR;
+- an inspection of every vector-store search and delete;
+- API keys refused outside their read allowlist.
+
+[docs/security.md](docs/security.md) lists every control with its `file:line` and the test
+that proves it, and the known gaps.
+
+## Limitations (measured or known)
+
+- **Slow on CPU:** retrieval with the reranker is about 38 s per query (median, uncached),
+  and a llama3.2:3b answer about 120 s (median), so a chat answer takes minutes. Search
+  without the reranker is 0.06 s.
+- **Answer quality:** measured only by deterministic checks and 15 hand grades; the small
+  LLM judge failed calibration.
+- **Hold-out:** 12 questions, so it can only show the configuration didn't collapse.
+- **Most common failure** (failure analysis): the answer model cites the wrong source while
+  the right one is in the prompt
+  ([failure-analysis.md](docs/decisions/failure-analysis.md)).
+- **CI** (`.github/workflows/ci.yml`: lint, unit, integration) is **unverified on GitHub**.
+  A clean local simulation of its steps passed.
+- **Clock steps:** the dev machine's clock steps backwards. Message and conversation order
+  survive it, but other lists can show a different order (security.md, known gaps).
+
+## Licence
+
+This project uses `pymupdf4llm`, which depends on PyMuPDF licensed under AGPL-3.0. Anyone who
+interacts with a modified version of this service over a network must be offered its source
+code. See [ADR-0001](docs/decisions/0001-pdf-parser-agpl-licence.md) for the decision and its
+revisit conditions.
