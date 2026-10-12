@@ -1,15 +1,16 @@
 # M10: advanced techniques, built, measured and not built
 
 Date: 2026-10-12. The guide's M10 lesson is to form a hypothesis, implement it, measure it,
-and keep only what earns its cost. Measurements are in `eval-log.md` (M10-1, M10-2); dev
+and keep only what earns its cost. Measurements are in `eval-log.md` (M10-1, M10-2, M10-3); dev
 only, since the v1 hold-out is spent.
 
-## Built behind settings and measured on dev (both kept off)
+## Built behind settings and measured on dev (all kept off)
 
 | technique | setting | dev result | decision |
 |---|---|---|---|
 | Weighted RRF (dense 1.5 / 2.0 vs BM25 1.0) | `RRF_DENSE_WEIGHT` (default 1.0) | E3: R@10 34 -> 35, R@5 31 -> 32, MRR 0.635 -> 0.639; only 2 questions moved. The 5 dense-only ranking failures didn't move, because with rerank on, fusion only picks the reranker's window. | **off**: below the +2-question rule fixed beforehand |
 | Quote-then-cite answer prompt | `ANSWER_STYLE` (default `cite`) | Cites a gold source 15/40 -> 21/41; uncited, malformed and bare-citation answers all go to 0. But exact correct refusals fall 4/7 -> 0/7, because a Quote: line is always written, and Answer:-part facts fall 7 -> 5. | **off**: the refusal and facts conditions of the rule fail |
+| Refusal-first quote-then-cite | `ANSWER_STYLE=quote_refusal_first` | Exact correct refusals 5/7 (better than `cite`'s 4), uncited and malformed 0. But 26/39 answers are a bare Quote: line with no answer, false refusals 1 -> 2, and cites-gold 18/39. | **off**: fails 2 of 4 conditions (ADR-0016) |
 
 ## Considered and not built here (with the evidence)
 

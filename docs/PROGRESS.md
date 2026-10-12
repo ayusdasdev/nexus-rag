@@ -632,8 +632,14 @@ with read-only, tenant-bound API keys.
 - [x] Semantic caching: design note only (no repeated-query data), in
   `docs/decisions/m10-techniques.md`.
 - [x] Short notes on the M10.6 techniques (no builds), in `docs/decisions/m10-techniques.md`.
-- [ ] Your decision: dataset v2 for a final check, and whether to try the refusal-first
-  prompt variant.
+- [x] M10-3 refusal-first quote-then-cite behind `ANSWER_STYLE=quote_refusal_first`
+  (default `cite`, tested unchanged; `7917b27`). Hypothesis and your decision rule first
+  (`e11c316`), then one 97-min dev run in 3 batches with no alerts.
+  - **Better:** exact correct refusals 5/7 (`cite` 4/7, quote 0/7); uncited and malformed 0.
+  - **Worse:** 26/39 answers are a bare Quote: line; false refusals 2 (> 1); cites-gold
+    18/39 (< 20).
+  - **Decision:** fails 2 of 4 conditions, so `cite` stays the default (ADR-0016).
+- [x] Dataset v2 stays deferred, since no default changed (your instruction).
 
 ## M11: Packaging
 
