@@ -17,6 +17,7 @@ from app.api.documents import get_task_queue
 from app.core.errors import TransientError
 from app.main import app
 from app.providers.embeddings import ModelNotCached
+from app.providers.embeddings import is_cached as embeddings_cached
 from app.repositories.blob_store import LocalBlobStore, get_blob_store
 from app.repositories.vector_store import VectorStoreRejected, get_vector_store
 from app.services import retrieval
@@ -62,6 +63,11 @@ async def _signed_up_headers(client: AsyncClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+# Without the query embedder the request fails at embedding (503) before it reaches the
+# faulty store, so the mapping under test would never run.
+@pytest.mark.skipif(
+    not embeddings_cached(), reason="embedding models not cached; run make fetch-models"
+)
 @pytest.mark.parametrize(
     ("exc", "expected_status"),
     [

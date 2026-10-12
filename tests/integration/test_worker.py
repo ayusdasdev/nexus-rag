@@ -238,6 +238,7 @@ async def _tenant_of(document_id: uuid.UUID) -> uuid.UUID:
     return tenant_id
 
 
+@needs_tokenizer
 async def test_chunked_document_is_embedded_upserted_and_marked_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -270,6 +271,7 @@ async def test_embedding_status_document_is_reclaimed_and_finished(
     assert (await _row(document_id)).status == DocumentStatus.ready
 
 
+@needs_tokenizer
 async def test_rerun_is_safe_and_leaves_no_duplicate_points(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -287,6 +289,7 @@ async def test_rerun_is_safe_and_leaves_no_duplicate_points(
     assert (await _row(document_id)).status == DocumentStatus.ready
 
 
+@needs_tokenizer
 async def test_points_from_an_earlier_run_that_are_no_longer_current_are_removed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -314,6 +317,7 @@ async def test_points_from_an_earlier_run_that_are_no_longer_current_are_removed
     )
 
 
+@needs_tokenizer
 async def test_dimension_mismatch_fails_permanently_with_a_readable_message(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -355,6 +359,7 @@ async def test_missing_model_fails_with_make_fetch_models_hint(
     assert "make fetch-models" in row.error
 
 
+@needs_tokenizer
 async def test_transient_qdrant_error_retries_three_times_then_marks_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -379,6 +384,7 @@ async def test_transient_qdrant_error_retries_three_times_then_marks_failed(
     assert row.error.startswith("TransientError")
 
 
+@needs_tokenizer
 async def test_transient_qdrant_error_then_success_resumes_from_embedding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -401,6 +407,7 @@ async def test_transient_qdrant_error_then_success_resumes_from_embedding(
     assert (await _row(document_id)).status == DocumentStatus.ready
 
 
+@needs_tokenizer
 async def test_heading_path_is_prepended_only_when_flag_is_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -436,6 +443,7 @@ async def test_heading_path_is_prepended_only_when_flag_is_on(
     assert any("\n" in text for text in expected)
 
 
+@needs_tokenizer
 async def test_embedding_batches_respect_the_batch_size(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
@@ -460,6 +468,7 @@ async def test_embedding_batches_respect_the_batch_size(
     assert sum(sizes) == len(chunks)
 
 
+@needs_tokenizer
 async def test_worker_takes_only_the_document_id_from_the_task_payload(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedding_stack: Any
 ) -> None:
