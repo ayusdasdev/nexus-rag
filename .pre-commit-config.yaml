@@ -1,0 +1,16 @@
+# pre-commit hooks (M9 9.3): the project's own pinned ruff through uv, so the hooks match
+# `make lint` and need no download. Install with `pre-commit install` (pre-commit itself is a
+# tool on your machine, not a project dependency).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]

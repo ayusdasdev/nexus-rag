@@ -510,9 +510,28 @@ with read-only, tenant-bound API keys.
   ADR-0014 and `docs/mcp.md` were finalised from it. Not run: the Inspector, and Claude Code
   registration (yours to run). The API was stopped afterwards. It had in fact shut itself down
   cleanly at 07:43, about 9 minutes after the run ended, for a reason the log doesn't show.
-- [ ] 9.2 `app/mcp_server/` (official MCP SDK): read-only `search_documents` and
-  `list_documents`, no tenant argument, thin adapter over the REST API, capped output, stderr-only
-  logs. Subprocess JSON-RPC tests and a test that no schema has tenant_id. New dep: `mcp`.
+- [x] 9.2 done (9.2a-c above).
+- [x] 9.3a The CI simulation (clean worktree, no `.env`, empty model caches) first found 11
+  integration failures:
+  - 10 model-dependent tests lacked the existing skip, now added (`f2a5410`). With models they
+    run and pass (11 cases); without, they skip.
+  - 1 was a real flaky bug: conversations listed out of creation order after a clock step
+    (in the DB, the last of 3 got `created_at` ~148 ms before the others). Reproduced and
+    fixed with a monotonic `created_at` per owner (`c6d450d`, ADR-0009). Ties were already
+    stable on `(created_at, id)`.
+
+  Re-run at `c6d450d`: lint, unit 686, migrate, integration 387 passed, 0 failed, 24 skipped
+  (all missing-model reasons, listed with `-rs`; output in `~/nexus-rag-test-logs/`).
+- [x] 9.3b `.github/workflows/ci.yml`, with the jobs you chose (lint, unit, integration with
+  postgres/redis/qdrant service containers pinned to the compose images).
+  - **Workflow settings:** `permissions: contents: read`; concurrency cancel-in-progress;
+    uv 0.12.20 with its cache; actions pinned to commit SHAs (checkout v7.0.1, setup-uv
+    v10.2.0, chosen because v10.3.0 was only 3 days old); `-rs` lists skips.
+  - **Status:** UNVERIFIED on GitHub (it can't run here), but the simulation above ran the
+    same steps.
+  - **Deferred:** the Docker build job and eval-smoke (your choice).
+  - **Pre-commit:** `.pre-commit-config.yaml` runs the project's own ruff through uv (no
+    download).
 - [ ] 9.3 `.github/workflows/ci.yml` (lint, unit, integration with service containers, docker
   build), `eval-smoke` workflow, pre-commit with ruff. CI can't run here, so it will be
   reported as unverified until you push.
