@@ -500,6 +500,16 @@ with read-only, tenant-bound API keys.
   - **Errors:** API failures become readable tool errors without server details.
   - **Output channel:** logs go to stderr as JSON, and the key is never logged.
   - **Tests:** 14 subprocess JSON-RPC tests against a fake API on loopback.
+- [x] 9.2c Real verification run (2026-10-12) on the local API with a fresh read-only key:
+  - both tools returned real results (search 52.0 s cold);
+  - the tool schemas have no tenant field;
+  - writes with the key were 403;
+  - the key appeared in no output or log;
+  - the key was revoked afterwards (then 401).
+
+  ADR-0014 and `docs/mcp.md` were finalised from it. Not run: the Inspector, and Claude Code
+  registration (yours to run). The API was stopped afterwards. It had in fact shut itself down
+  cleanly at 07:43, about 9 minutes after the run ended, for a reason the log doesn't show.
 - [ ] 9.2 `app/mcp_server/` (official MCP SDK): read-only `search_documents` and
   `list_documents`, no tenant argument, thin adapter over the REST API, capped output, stderr-only
   logs. Subprocess JSON-RPC tests and a test that no schema has tenant_id. New dep: `mcp`.
