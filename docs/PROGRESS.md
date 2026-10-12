@@ -613,14 +613,27 @@ with read-only, tenant-bound API keys.
 
 ## M10: Advanced RAG lab (at least two builds behind flags, evaluated)
 
-- [?] Which two (or more) to build: contextual retrieval (`CONTEXTUALIZE`, new migration for
-  `chunks.context`), `QUERY_TRANSFORM=multi|hyde`, or agentic mode. Decide after M8, using
-  the numbers.
-- [ ] Each one evaluated against the M8 baseline with cost and latency. "Didn't help" is recorded
-  honestly.
-- [ ] Semantic caching: design note only (tenant-scoped key, invalidation), unless the data shows
-  repeated queries.
-- [ ] Short notes on the techniques the guide says to know without building (M10.6).
+- [x] Your decision (2026-10-12): build weighted RRF and the quote-then-cite prompt, dev only.
+  Contextual retrieval, multi-query/HyDE and agentic mode are not built, for reasons with
+  evidence in `docs/decisions/m10-techniques.md`.
+- [x] M10-1 weighted RRF behind `RRF_DENSE_WEIGHT` (default 1.0, tested unchanged;
+  `8d7e01e`). The hypothesis came first (`bddaca6`), then the runs (`27609da`). E3 R@10
+  34 -> 35, MRR 0.635 -> 0.639 at both 1.5 and 2.0, so it **didn't help** by the rule fixed
+  beforehand; the default stays plain RRF. Runs took 7 s to 3 min (rerank cache).
+- [x] M10-2 quote-then-cite prompt behind `ANSWER_STYLE` (default `cite`, tested unchanged;
+  `436f555`). Hypothesis first (`161c7f1`), then one 107-min dev generation run in 3 batches
+  with no alerts.
+  - **Better:** cites a gold source 15/40 -> 21/41; uncited, malformed and bare-citation
+    answers 0.
+  - **Worse:** exact correct refusals 4/7 -> 0/7, because a Quote: line is always written,
+    and Answer:-part facts 7 -> 5.
+  - **Decision:** not adopted, by the rule. A refusal-first variant is a possible follow-up,
+    needing your approval.
+- [x] Semantic caching: design note only (no repeated-query data), in
+  `docs/decisions/m10-techniques.md`.
+- [x] Short notes on the M10.6 techniques (no builds), in `docs/decisions/m10-techniques.md`.
+- [ ] Your decision: dataset v2 for a final check, and whether to try the refusal-first
+  prompt variant.
 
 ## M11: Packaging
 
