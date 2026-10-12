@@ -124,3 +124,13 @@ def test_without_neighbors_a_hit_records_none() -> None:
     )
 
     assert result.hits[0].neighbor_indexes == []
+
+
+def test_the_dense_weight_reaches_retrieve_and_defaults_to_plain_rrf() -> None:
+    seen: list[dict[str, Any]] = []
+    search = build_search(_fake_retrieve(seen), TENANT, {DOC: "a.md"})
+
+    asyncio.run(search({"id": "q1", "question": "Q?"}, RunConfig()))
+    asyncio.run(search({"id": "q1", "question": "Q?"}, RunConfig(dense_weight=2.0)))
+
+    assert [call["dense_weight"] for call in seen] == [1.0, 2.0]

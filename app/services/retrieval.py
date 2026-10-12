@@ -147,12 +147,14 @@ def _to_candidate(hit: VectorHit, rank: int, source: Source) -> Candidate:
 
 
 def fuse_rrf(
-    dense: Sequence[Candidate], sparse: Sequence[Candidate]
+    dense: Sequence[Candidate], sparse: Sequence[Candidate], dense_weight: float = 1.0
 ) -> list[Candidate]:
-    """Reciprocal Rank Fusion of the two candidate lists, using each candidate's rank."""
+    """Reciprocal Rank Fusion of the two candidate lists, using each candidate's rank.
+    dense_weight scales the dense list's contribution (1.0: plain RRF; M10)."""
     ordered = rrf_from_ranks(
         [[(c.chunk_id, c.rank) for c in dense], [(c.chunk_id, c.rank) for c in sparse]],
         _RRF_K,
+        weights=[dense_weight, 1.0],
     )
     return [
         Candidate(chunk_id=chunk_id, score=score, rank=rank, source="fused")
@@ -187,6 +189,7 @@ async def retrieve(
     use_rerank: bool = True,
     expand: Expand = "none",
     trace: bool = False,
+    dense_weight: float = 1.0,
 ) -> RetrieveResult:
     """Embed -> dense/sparse search -> RRF fuse -> optional rerank -> hydrate from Postgres
     -> optional neighbor expansion.
@@ -234,7 +237,7 @@ async def retrieve(
         _stage(stages, "sparse_search", start)
 
     start = time.perf_counter()
-    fused = fuse_rrf(dense, sparse)
+    fused = fuse_rrf(dense, sparse, dense_weight)
     _stage(stages, "fuse", start)
 
     # Hydrate the whole fused list (at most 2 x candidates ids) before cutting it, so a

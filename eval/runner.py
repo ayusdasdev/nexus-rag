@@ -41,6 +41,8 @@ class RunConfig:
     candidates: int = 40
     expand: ExpandMode = "none"
     limit: int = 10
+    # Weighted RRF (M10): the dense list's weight; BM25 stays at 1.0. 1.0 is plain RRF.
+    dense_weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,8 @@ SearchFn = Callable[[dict[str, Any], RunConfig], Coroutine[Any, Any, SearchResul
 
 
 def parse_overrides(pairs: Sequence[str]) -> RunConfig:
-    """--set key=value for mode, rerank, candidates, expand, limit; anything else is refused."""
+    """--set key=value for mode, rerank, candidates, expand, limit, dense_weight; anything
+    else is refused."""
     values: dict[str, Any] = {}
     for pair in pairs:
         key, sep, raw = pair.partition("=")
@@ -86,6 +89,11 @@ def parse_overrides(pairs: Sequence[str]) -> RunConfig:
             if not 1 <= number <= top:
                 raise ValueError(f"{key} must be 1-{top}, not {number}")
             values[key] = number
+        elif key == "dense_weight":
+            weight = float(raw)
+            if not 0 < weight <= 10:
+                raise ValueError(f"dense_weight must be in (0, 10], not {weight}")
+            values[key] = weight
         elif key == "expand":
             if raw not in ("none", "neighbors"):
                 raise ValueError(f"expand must be none or neighbors, not {raw!r}")

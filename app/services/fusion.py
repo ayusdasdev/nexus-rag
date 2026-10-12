@@ -23,18 +23,27 @@ def rrf[T: Hashable](
 
 
 def rrf_from_ranks[T: Hashable](
-    ranked_lists: Sequence[Iterable[tuple[T, int]]], k: int = RRF_K
+    ranked_lists: Sequence[Iterable[tuple[T, int]]],
+    k: int = RRF_K,
+    weights: Sequence[float] | None = None,
 ) -> list[tuple[T, float]]:
-    """rrf() over explicit (id, rank) pairs, for callers whose lists already carry ranks."""
+    """rrf() over explicit (id, rank) pairs, for callers whose lists already carry ranks.
+
+    weights, one per list (default all 1.0: plain RRF), scale each list's 1/(k + rank)
+    contribution (weighted RRF, M10)."""
     if k < 0:
         raise ValueError(f"k must be >= 0, got {k}")
+    if weights is None:
+        weights = [1.0] * len(ranked_lists)
+    if len(weights) != len(ranked_lists) or any(w <= 0 for w in weights):
+        raise ValueError(f"need one positive weight per list, got {list(weights)}")
     scores: dict[T, float] = {}
-    for ranked in ranked_lists:
+    for ranked, weight in zip(ranked_lists, weights, strict=True):
         best: dict[T, int] = {}
         for item, rank in ranked:
             if rank < 1:
                 raise ValueError(f"rank must be >= 1, got {rank}")
             best[item] = min(rank, best.get(item, rank))
         for item, rank in best.items():
-            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
+            scores[item] = scores.get(item, 0.0) + weight / (k + rank)
     return sorted(scores.items(), key=lambda pair: (-pair[1], str(pair[0])))

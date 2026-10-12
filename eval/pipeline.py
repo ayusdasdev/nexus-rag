@@ -103,6 +103,7 @@ def build_search(
             use_rerank=config.rerank,
             expand=config.expand,
             trace=True,
+            dense_weight=config.dense_weight,
         )
         hits = [
             Hit(

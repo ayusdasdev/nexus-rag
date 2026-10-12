@@ -189,6 +189,7 @@ def test_the_run_records_config_dataset_seed_commit_and_timings(tmp_path: Path) 
         "candidates": 40,
         "expand": "none",
         "limit": 10,
+        "dense_weight": 1.0,
     }
     assert (meta["dataset"], meta["split_seed"], meta["git_sha"]) == (
         "test",
@@ -316,3 +317,11 @@ def test_a_state_file_inside_the_repo_is_recorded_relative_to_it(
     assert not any(isinstance(v, str) and v.startswith("/") for v in meta.values()), (
         meta
     )
+
+
+def test_dense_weight_is_an_override_with_plain_rrf_as_default() -> None:
+    assert RunConfig().dense_weight == 1.0
+    assert parse_overrides(["dense_weight=1.5"]).dense_weight == 1.5
+    for bad in ("dense_weight=0", "dense_weight=11", "dense_weight=x"):
+        with pytest.raises(ValueError):
+            parse_overrides([bad])

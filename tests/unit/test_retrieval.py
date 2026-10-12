@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Collection, Sequence
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -948,3 +949,54 @@ async def test_retrieve_records_each_stage_into_the_request_trace(
     assert {"embed_query", "dense_search", "sparse_search", "fuse", "rerank"} <= {
         s.name for s in trace.spans
     }
+
+
+# --- weighted fusion through retrieve() (M10) ---------------------------------------
+
+
+async def _fused_order(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> list[Any]:
+    _fixed_embed_query(monkeypatch)
+    tenant, doc = uuid.uuid4(), uuid.uuid4()
+    dense_only = uuid.UUID(int=2**128 - 1)  # sorts last on a tie
+    sparse_only = uuid.UUID(int=1)
+    store = FakeVectorStore(
+        dense_hits=[_hit_id(dense_only, doc, 0, 0.9)],
+        sparse_hits=[_hit_id(sparse_only, doc, 1, 5.0)],
+    )
+    records = [
+        ChunkRecord(
+            id=cid,
+            document_id=doc,
+            chunk_index=i,
+            text=t,
+            heading_path=None,
+            page=None,
+            token_count=1,
+        )
+        for i, (cid, t) in enumerate([(dense_only, "D"), (sparse_only, "S")])
+    ]
+    result = await retrieval.retrieve(
+        store=store,
+        reranker=_TextScoredReranker({}),
+        fetch_chunks=_fetcher(records),
+        tenant_id=tenant,
+        query="q",
+        limit=10,
+        use_rerank=False,
+        **kwargs,
+    )
+    return [item.text for item in result.items]
+
+
+@pytest.mark.asyncio
+async def test_by_default_fusion_is_plain_rrf(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Equal 1/61 scores: the tie goes by id, so the sparse-only chunk (id 1) comes first.
+    assert await _fused_order(monkeypatch) == ["S", "D"]
+    assert await _fused_order(monkeypatch, dense_weight=1.0) == ["S", "D"]
+
+
+@pytest.mark.asyncio
+async def test_a_dense_weight_above_one_lifts_dense_only_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert await _fused_order(monkeypatch, dense_weight=1.5) == ["D", "S"]

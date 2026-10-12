@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     rerank: bool = True
     # Results requested from each of the dense and sparse searches.
     candidates: int = Field(default=40, ge=1, le=100)
+    # Weighted RRF (M10): the dense list's weight against BM25's 1.0. 1.0 is plain RRF.
+    rrf_dense_weight: float = Field(default=1.0, gt=0, le=10)
     expand: Expand = "none"
 
     # Must be overridden via .env in any real deployment.

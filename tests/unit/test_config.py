@@ -94,3 +94,11 @@ def test_chunk_sizes_inside_the_bounds_are_accepted(size: int) -> None:
 def test_chunk_sizes_outside_the_bounds_are_refused(fields: dict[str, int]) -> None:
     with pytest.raises(ValidationError):
         Settings(**fields)  # type: ignore[arg-type]
+
+
+def test_rrf_dense_weight_defaults_to_plain_rrf_and_is_bounded() -> None:
+    assert Settings(_env_file=None).rrf_dense_weight == 1.0
+    assert Settings(rrf_dense_weight=2.0).rrf_dense_weight == 2.0
+    for bad in (0.0, -1.0, 10.5):
+        with pytest.raises(ValidationError):
+            Settings(rrf_dense_weight=bad)

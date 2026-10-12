@@ -89,6 +89,7 @@ async def retrieve_for_answer(
             use_rerank=settings.rerank,
             expand=settings.expand,
             trace=True,
+            dense_weight=settings.rrf_dense_weight,
         )
     annotate("retrieval", retrieval_summary(result))
     return result.items

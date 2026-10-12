@@ -94,6 +94,7 @@ async def search(
             else settings.rerank,
             expand=request.expand if request.expand is not None else settings.expand,
             trace=request.debug,
+            dense_weight=settings.rrf_dense_weight,
         )
     return SearchResponse(
         items=[
