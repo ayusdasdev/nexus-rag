@@ -5,10 +5,11 @@ doesn't exist (None / False), so the API can answer 404 for both.
 """
 
 import uuid
+from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.models.conversation import Conversation, Message, MessageRole
@@ -439,3 +440,76 @@ async def test_messages_added_at_once_get_distinct_increasing_timestamps() -> No
 
     stamps = sorted(m.created_at for m in added if m is not None)
     assert len(set(stamps)) == 5
+
+
+# --- conversation list order across a clock step and a timestamp tie (M9) -------------
+# Seen 2026-10-12 07:52 in a CI simulation: the last of three conversations got
+# created_at ~148 ms before the first two (WSL2/Docker clock stepped back), so the
+# "newest first" list put it last.
+
+
+async def _set_created_at(conversation_id: UUID, value: Any) -> None:
+    async with session_scope() as session:
+        await session.execute(
+            update(Conversation)
+            .where(Conversation.id == conversation_id)
+            .values(created_at=value)
+        )
+        await session.commit()
+
+
+async def test_conversations_list_newest_first_across_a_clock_step() -> None:
+    from datetime import timedelta
+
+    tenant, user = await _tenant_user()
+    first = await conversation_repository.create_conversation(tenant, user, "c0")
+    # The clock was an hour ahead when c0 was stored, then stepped back.
+    await _set_created_at(first.id, first.created_at + timedelta(hours=1))
+    second = await conversation_repository.create_conversation(tenant, user, "c1")
+    third = await conversation_repository.create_conversation(tenant, user, "c2")
+
+    listed, total = await conversation_repository.list_conversations(
+        tenant, user, limit=10
+    )
+
+    assert total == 3
+    assert [c.id for c in listed] == [third.id, second.id, first.id]
+
+
+async def test_a_timestamp_tie_lists_by_id_and_a_cursor_walk_sees_each_once() -> None:
+    tenant, user = await _tenant_user()
+    a = await conversation_repository.create_conversation(tenant, user, "a")
+    b = await conversation_repository.create_conversation(tenant, user, "b")
+    await _set_created_at(b.id, a.created_at)
+
+    listed, _ = await conversation_repository.list_conversations(tenant, user, limit=10)
+    walked: list[UUID] = []
+    after = None
+    for _ in range(5):
+        page, _ = await conversation_repository.list_conversations(
+            tenant, user, limit=1, after=after
+        )
+        if not page:
+            break
+        walked.append(page[0].id)
+        after = (page[0].created_at, page[0].id)
+
+    expected = sorted([a.id, b.id], key=str, reverse=True)
+    assert [c.id for c in listed] == expected == walked
+
+
+async def test_conversations_created_at_once_get_distinct_increasing_timestamps() -> (
+    None
+):
+    import asyncio
+
+    tenant, user = await _tenant_user()
+
+    created = await asyncio.gather(
+        *(
+            conversation_repository.create_conversation(tenant, user, str(i))
+            for i in range(5)
+        )
+    )
+
+    assert len({c.created_at for c in created}) == 5

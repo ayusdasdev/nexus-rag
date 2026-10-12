@@ -14,6 +14,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
 from app.models.conversation import Conversation, Message, MessageRole
+from app.models.user import User
 from app.repositories.session import session_scope
 
 
@@ -73,11 +74,39 @@ def _owned(tenant_id: UUID, user_id: UUID, conversation_id: UUID) -> Any:
     )
 
 
+# The smallest step that keeps created_at strictly increasing within its scope.
+_AFTER_THE_LAST = timedelta(microseconds=1)
+
+
 async def create_conversation(
     tenant_id: UUID, user_id: UUID, title: str | None
 ) -> ConversationRecord:
+    """A new conversation for the caller.
+
+    Conversations are listed newest first by created_at, so it must grow with each new one
+    even if the wall clock steps back (seen on WSL2/Docker, M9): the owner's user row is
+    locked, and the conversation gets now() or 1 microsecond after the owner's newest one,
+    whichever is later (the same rule as add_message, ADR-0009).
+    """
     async with session_scope() as session:
-        row = Conversation(tenant_id=tenant_id, user_id=user_id, title=title)
+        await session.execute(
+            select(User.id)
+            .where(User.id == user_id, User.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        last = await session.scalar(
+            select(func.max(Conversation.created_at)).where(
+                Conversation.tenant_id == tenant_id, Conversation.user_id == user_id
+            )
+        )
+        row = Conversation(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            title=title,
+            created_at=func.now()
+            if last is None
+            else func.greatest(func.now(), last + _AFTER_THE_LAST),
+        )
         session.add(row)
         await session.commit()
         await session.refresh(row)
@@ -170,9 +199,6 @@ async def list_messages(
         return [_message(row) for row in result.scalars().all()]
 
 
-_AFTER_LAST_MESSAGE = timedelta(microseconds=1)
-
-
 async def add_message(
     tenant_id: UUID,
     user_id: UUID,
@@ -210,7 +236,7 @@ async def add_message(
         created_at = (
             func.now()
             if last is None
-            else func.greatest(func.now(), last + _AFTER_LAST_MESSAGE)
+            else func.greatest(func.now(), last + _AFTER_THE_LAST)
         )
         row = Message(
             conversation_id=conversation_id,

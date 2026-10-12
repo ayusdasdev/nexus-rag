@@ -58,6 +58,18 @@ costs tens of seconds.
   the order they were added. You chose this over a new `seq` column, which would have needed
   a migration and a message-cursor change. Cost: after a backward step `created_at` can run
   slightly ahead of real time, and posts to one conversation queue on a row lock.
+- **Conversation list order (decided 2026-10-12).** The same clock step showed up in the list
+  of conversations: in a CI simulation, the last of three conversations got `created_at`
+  about 148 ms before the first two, so "newest first" put it last. This is in the database:
+  1 owner of 83 who ran that test. The list was already ordered by `(created_at, id)`, with
+  the cursor on the same pair, so ties were stable and paging never repeated or skipped a
+  row (a tie test pins this). What failed was creation order, not consistency.
+  `create_conversation` now locks the owner's user row and stores `greatest(now(), the
+  owner's newest conversation + 1 µs)`, the same rule as messages, rather than adding a
+  sequence column. The other `created_at` lists keep `(created_at, id)` order with
+  consistent cursors, but can show a different order than creation order after a clock step:
+  documents (a test assumes upload order), API keys (no paging; cosmetic), and traces (the
+  newest trace for a reused request id). They are unchanged for now.
 
 ## Security review follow-ups (2026-10-09)
 Fixed with tests: a fresh 404/401 exception per raise; the LLM rewrite takes an answer slot
