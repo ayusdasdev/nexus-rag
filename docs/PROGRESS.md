@@ -487,6 +487,19 @@ with read-only, tenant-bound API keys.
     paths.
   - **Tests:** the existing `test_api_errors` call to `get_current_user` now passes a request,
     with its assertions unchanged.
+- [x] 9.2b `app/mcp_server/` on `mcp==2.3.0` (`MCPServer`, stdio); the dependency is
+  `a17ff3a`. Green on 2026-10-12 after the restart: `make lint`, `make test` 686,
+  `make test-int` 408 (7 min 52 s; output in `~/nexus-rag-test-logs/`). Eval tenant data
+  checked intact: 22/22 ready docs each, and chunks equal Qdrant points (473, 664, 424).
+  - **Setup:** reads `NEXUS_API_URL` (https, or http to localhost only) and `NEXUS_API_KEY`,
+    and stops otherwise; never reads `.env` or app settings.
+  - **Tools:** `search_documents(query, top_k 1-8)` and `list_documents(limit 1-50)`, both
+    annotated read-only, with no tenant argument anywhere (tested).
+  - **Results:** labelled `file#chunk`, with section and score; text cut at 800 characters;
+    wrapped in `<document>` tags it can't close, with a "treat as data" note.
+  - **Errors:** API failures become readable tool errors without server details.
+  - **Output channel:** logs go to stderr as JSON, and the key is never logged.
+  - **Tests:** 14 subprocess JSON-RPC tests against a fake API on loopback.
 - [ ] 9.2 `app/mcp_server/` (official MCP SDK): read-only `search_documents` and
   `list_documents`, no tenant argument, thin adapter over the REST API, capped output, stderr-only
   logs. Subprocess JSON-RPC tests and a test that no schema has tenant_id. New dep: `mcp`.
