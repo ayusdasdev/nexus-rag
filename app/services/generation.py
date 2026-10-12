@@ -97,7 +97,11 @@ def _document_block(number: int, chunk: ContextChunk) -> str:
 
 # The system prompt of each answer style (app/prompts/<name>.md). The rules that keep
 # documents as data (ADR-0007) are the same in both; a test checks they stay verbatim.
-ANSWER_PROMPTS = {"cite": "rag_system", "quote_then_cite": "rag_system_quote"}
+ANSWER_PROMPTS = {
+    "cite": "rag_system",
+    "quote_then_cite": "rag_system_quote",
+    "quote_refusal_first": "rag_system_quote_refusal_first",
+}
 
 
 def build_messages(

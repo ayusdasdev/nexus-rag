@@ -109,3 +109,13 @@ def test_answer_style_defaults_to_cite_and_accepts_quote_then_cite() -> None:
     assert Settings(answer_style="quote_then_cite").answer_style == "quote_then_cite"
     with pytest.raises(ValidationError):
         Settings(answer_style="poetry")
+
+
+def test_answer_style_accepts_the_refusal_first_variant_and_keeps_cite_default() -> (
+    None
+):
+    assert Settings(_env_file=None).answer_style == "cite"
+    assert (
+        Settings(answer_style="quote_refusal_first").answer_style
+        == "quote_refusal_first"
+    )

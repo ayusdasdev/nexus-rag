@@ -597,3 +597,20 @@ def test_quote_then_cite_changes_only_the_system_prompt() -> None:
 def test_an_unknown_answer_style_is_refused() -> None:
     with pytest.raises(ValueError):
         build_messages("Q?", [], max_context_tokens=10, answer_style="poetry")  # type: ignore[arg-type]
+
+
+def test_the_refusal_first_style_changes_only_the_system_prompt() -> None:
+    chunks = [_chunk("Charge for 2 hours.")]
+
+    default = build_messages("Q?", chunks, max_context_tokens=1000)
+    variant = build_messages(
+        "Q?",
+        chunks,
+        max_context_tokens=1000,
+        answer_style="quote_refusal_first",
+    )
+
+    assert variant.messages[0].content == prompts.load_prompt(
+        "rag_system_quote_refusal_first"
+    )
+    assert variant.messages[1:] == default.messages[1:]

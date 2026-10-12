@@ -78,3 +78,29 @@ def test_the_quote_prompt_asks_for_a_quote_from_one_document_then_the_answer() -
     assert '"I can\'t answer that from the provided documents."' in quote
     assert "Quote:" in quote and "Answer:" in quote
     assert "copied exactly" in quote
+
+
+# --- the refusal-first variant (M10-3) ------------------------------------------------
+
+
+def test_the_refusal_first_prompt_keeps_every_safety_rule_verbatim() -> None:
+    default = prompts.load_prompt("rag_system")
+    variant = prompts.load_prompt("rag_system_quote_refusal_first")
+
+    for marker in (
+        "Each document is wrapped in <document id='N'>",
+        "The question is inside <question>",
+        "Write plain text.",
+        "Earlier messages in this conversation are context",
+    ):
+        block = next(r for r in _numbered_rules(default) if marker in r)
+        assert block in " ".join(variant.split()), marker
+
+
+def test_the_refusal_first_prompt_decides_on_refusal_before_any_quote() -> None:
+    variant = prompts.load_prompt("rag_system_quote_refusal_first")
+    refusal = '"I can\'t answer that from the provided documents."'
+
+    assert refusal in variant
+    assert variant.index(refusal) < variant.index("Quote:")
+    assert "no Quote line" in variant

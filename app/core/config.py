@@ -12,8 +12,9 @@ Expand = Literal["none", "neighbors"]
 LLMProviderName = Literal["ollama", "anthropic"]
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 RewriteMode = Literal["rule", "llm", "off"]
-# How answers are written (M10): "cite" (rag_system) or "quote_then_cite" (rag_system_quote).
-AnswerStyle = Literal["cite", "quote_then_cite"]
+# How answers are written (M10): "cite" (rag_system), "quote_then_cite" (rag_system_quote) or
+# "quote_refusal_first" (rag_system_quote_refusal_first).
+AnswerStyle = Literal["cite", "quote_then_cite", "quote_refusal_first"]
 
 
 class Settings(BaseSettings):
@@ -59,7 +60,8 @@ class Settings(BaseSettings):
     # Weighted RRF (M10): the dense list's weight against BM25's 1.0. 1.0 is plain RRF.
     rrf_dense_weight: float = Field(default=1.0, gt=0, le=10)
     # The answer prompt (M10). "cite" is the M5 prompt; "quote_then_cite" quotes the
-    # answering sentence first (failure analysis, bucket E).
+    # answering sentence first (failure analysis, bucket E); "quote_refusal_first" decides
+    # on refusal before any quote (M10-3).
     answer_style: AnswerStyle = "cite"
     expand: Expand = "none"
 

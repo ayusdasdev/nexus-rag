@@ -335,3 +335,9 @@ def test_answer_style_is_an_override_with_cite_as_default() -> None:
     )
     with pytest.raises(ValueError):
         parse_overrides(["answer_style=poetry"])
+
+
+def test_answer_style_override_accepts_the_refusal_first_variant() -> None:
+    assert parse_overrides(["answer_style=quote_refusal_first"]).answer_style == (
+        "quote_refusal_first"
+    )
