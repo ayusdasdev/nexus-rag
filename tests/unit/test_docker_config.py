@@ -77,3 +77,11 @@ def test_make_app_down_stops_only_the_app_services_and_keeps_volumes() -> None:
     for name in APP_SERVICES:
         assert name in recipe
     assert "\napp-up:" in makefile
+
+
+def test_infrastructure_ports_are_published_on_loopback_only() -> None:
+    # Redis and Qdrant have no auth and Postgres uses the dev password (M9 review, low):
+    # never on every interface. The app containers reach them by service name instead.
+    for name in ("postgres", "redis", "qdrant"):
+        for port in COMPOSE["services"][name]["ports"]:
+            assert str(port).startswith("127.0.0.1:"), (name, port)
