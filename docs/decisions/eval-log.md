@@ -809,3 +809,59 @@ over 5 minutes, or signs of sleep. One line is written per question.
 
 **Dev-only caveat:** n = 7 for refusals (one question is 14 points), and dev has been used for
 every choice so far.
+
+### M10-3 result (measured), dev only
+
+**The run:** 2026-10-12 17:57-19:34 UTC, 97 min. Three batches of 16, with `ollama stop`
+between them and 8.2-8.5 GB available at each start. 48/48 written, 0 errors, no answer
+over 5 minutes, min available memory 2,289 MB. Clean tree (`e11c316`).
+
+**The clock:** boot time from uptime moved 11:40:05 -> 11:44:35 during the run. That is
+gradual drift, with no jump over 30 s in any 15 s check, so no sign of sleep.
+
+| check | E3-gen (`cite`) | M10-quote | **M10-quote-rf** | rule |
+|---|---|---|---|---|
+| exact correct refusals (of 7) | 4 | 0 | **5** | >= 4: **pass** |
+| near / missed refusals | 2 / 1 | 4 / 3 | 0 / 2 (q053, q058) | |
+| false refusals (of 41) | 1 | 0 | **2** (q001, q061) | <= 1: **fail** |
+| answered, citing a gold source | 15/40 | 21/41 | **18/39** | >= 20: **fail** |
+| uncited / malformed | 6 / 4 | 0 / 0 | **0 / 0** | <= 2 each: **pass** |
+| numeric citations valid / invalid | 40 / 0 | 50 / 1 | 45 / 0 | |
+| answers with Quote: and Answer: | n/a | 41/41 | **13/39** | |
+| facts all found: whole answer / Answer: part | 7/23 | 9/24 / 5/24 | 6/22 / 6/22 | |
+| generation median / max | 120 / 230 s | 126 / 203 s | 115 / 176 s | |
+
+**What happened:**
+- **Refusals came back and are exact.** Five of 7 are now the plain sentence, including q055
+  and q059, which M10-2 answered from an irrelevant quote. q057 ("no SLA") is now refused,
+  which matches the v1 label.
+- **The model now stops after the quote.** 26 of 39 answers are only a `Quote: "..." [N]`
+  line, with no Answer line. q040 became `Quote: "3B" [5]`, wrong, where M10-2 had
+  "Q4_K_M [1]". Moving the refusal decision first seems to have made the second rule read
+  as optional to a 3B model.
+- **Cites-gold fell to 18, false refusals rose to 2:**
+  - lost gold citations vs M10-2: q001 (now a false refusal), q012, q021, q030, q040, q043;
+    gained: q024, q025, q044;
+  - q061 is refused cleanly this time; it was a hidden refusal in M10-2 and a false refusal
+    in E3-gen;
+  - q001 is a new false refusal.
+- **The two missed refusals** (q053, q058) are bare quotes, with no hedging text.
+
+**Hypotheses vs result:**
+- Correct refusals 2-4/7: **wrong**, better (5/7). I had predicted the refusal rule would
+  decide it; it passed.
+- Near-refusals 1-3: **wrong**, 0.
+- False refusals 0-2: **right** (2), but at the top of the range, and over the rule's limit.
+- Cites-gold 18-22: **right** (18), at the bottom, and below the rule's 20.
+- Uncited and malformed 0-1: **right** (0 and 0).
+- Format compliance at least 90%: **wrong**, 33%. This is the main surprise.
+- Answer:-part facts 4-7: **right** (6).
+- Median 120-135 s: **wrong**, faster (115 s), because bare quotes are short.
+
+**Decision, by your rule fixed beforehand: `cite` stays the default.** Two of the four
+conditions fail: false refusals 2 > 1, and cites-gold 18 < 20. The setting stays available
+for future runs. See ADR-0016.
+
+**Dev-only caveat:** n = 7 for refusals, n = 41 for answers. The margins that decided it are
+1 false refusal and 2 gold citations, which are within what a rerun on a 3B model could move.
+No rerun was made: by the rule, a fail is recorded and not rerun until it passes.

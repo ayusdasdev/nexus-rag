@@ -1,0 +1,40 @@
+{
+ "dataset": "v1",
+ "split": "dev",
+ "split_seed": 20261010,
+ "git_sha": "e11c3164d18f0c5b3a626878f1654b5b19234179",
+ "git_dirty": false,
+ "generate": true,
+ "state": "eval/state/eval_tenant.json",
+ "tenant_id": "95e3270d-a0dc-4d06-80c8-9bfed69486c3",
+ "config": {
+  "mode": "hybrid",
+  "rerank": true,
+  "candidates": 40,
+  "expand": "none",
+  "limit": 6,
+  "dense_weight": 1.0,
+  "answer_style": "quote_refusal_first"
+ },
+ "runner_seed": 0,
+ "question_ids": [
+  "q001",
+  "q003",
+  "q004",
+  "q005",
+  "q006",
+  "q007",
+  "q008",
+  "q010",
+  "q012",
+  "q014",
+  "q015",
+  "q016",
+  "q017",
+  "q018",
+  "q019",
+  "q021"
+ ],
+ "started_at": "2026-10-12T17:57:23.054178+00:00",
+ "finished_at": "2026-10-12T19:34:04.834439+00:00"
+}
