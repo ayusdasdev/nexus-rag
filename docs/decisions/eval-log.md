@@ -689,3 +689,71 @@ Otherwise keep `cite`, and record why.
   single answer over 5 minutes, or signs of sleep.
 - **Time:** estimated 105-135 min. Retrieval is cached from E3-gen, so this is generation
   only.
+
+### M10-2 result (measured), dev only
+
+**The run:** 2026-10-12 15:49-17:37 UTC, 107 min. Three batches of 16, with `ollama stop`
+between them and 8.0-8.4 GB available at each start. 48/48 written, 0 errors, no answer
+over 5 minutes, min available memory 1,981 MB. Clean tree (`161c7f1`).
+
+**The clock:** the boot time computed from uptime moved from 11:34:30 to 11:39:10 during the
+run. Wall clock and uptime drifted about 4.7 min apart in total, with no single jump over
+30 s in any 15 s check, so it looks like gradual corrections, not a sleep. Answer timings
+use a monotonic clock and are unaffected.
+
+| check | E3-gen, re-scored (`cite`) | M10-quote (`quote_then_cite`) |
+|---|---|---|
+| answered (of 41 answerable) | 40 | 41 |
+| **answered, citing a gold source** | 15/40 | **21/41** |
+| answered without any citation | 6 | **0** |
+| answers with malformed citations | 4 | **0** |
+| bare-citation answers (only "[N]") | 2 (q040, q053) | **0** |
+| numeric citations valid / invalid | 40 / 0 | 50 / 1 (q031 cited [7] of 6) |
+| format compliance (Quote: and Answer: lines) | n/a | 41/41 |
+| **exact correct refusals (of 7)** | **4** | **0** |
+| near-refusals / missed | 2 / 1 | 4 / 3 |
+| false refusals (of 41) | 1 (q061) | 0 (but see q061 below) |
+| facts all found, whole answer | 7/23 | 9/24 |
+| **facts all found, Answer: part only** | 7/23 | **5/24** (mean share 0.453) |
+| generation median / max | 120 s / 230 s | 126 s / 203 s (first token 104 s) |
+
+**What happened:**
+- **The format is followed perfectly,** and it removed every uncited, malformed and bare
+  answer. q040 now answers "Q4_K_M [1]" where it used to answer "[5]".
+- **Answers citing a gold source rose by 6.**
+- **But the model now writes a Quote: line for every question, unanswerable ones
+  included.** It then either hedges (q052, q053, q056 and q058 are near-refusals) or uses
+  an irrelevant quote as if it answered: q055 gives rate-limit numbers as "payment methods".
+- **Refusals no longer match the exact sentence,** even when the model does refuse. q061's
+  output is `Quote: "…" [5]` followed by `Answer: I can't answer that from the provided
+  documents.` The exact-match refusal check fails on it, and so would the app's own
+  `done.refused` flag. Refusal is broken in the app too, not only in the eval.
+- **q057 is a label nuance:** "No SLA is defined for the Enterprise plan" is arguably a
+  correct answer from the corpus; v1 labels the question unanswerable (v1 is locked).
+- **Facts on the answer itself fell** (5 vs 7 all found). The whole-answer gain to 9 comes
+  from copied quote text, as the measurement rule anticipated.
+
+**Hypotheses vs result:**
+- Cites a gold source 20-26/40: **right** (21/41).
+- Uncited answers 0-2: **right** (0). Bare-citation answers 0: **right**.
+- Correct refusals 4-6/7: **wrong**, 0/7.
+- Near-refusals 0-1: **wrong**, 4. Missed 0-1: **wrong**, 3.
+- False refusals 1-3: **right** by the check (0), but q061 is a refusal hidden behind a quote.
+- Facts all found 7-11 on the whole answer: **right** (9). 6-10 on the Answer: part:
+  **wrong** (5).
+- Format compliance at least 80%: **right** (100%).
+- Median latency 130-170 s: **wrong**, faster (126 s).
+
+**Decision, by the rule fixed beforehand: keep `ANSWER_STYLE=cite`.** Cites-gold passed
+(21 >= 19), but correct refusals fell below 4/7 (0/7) and Answer:-part facts dropped (7 ->
+5). The setting stays available.
+
+**What it teaches** (not run; a possible follow-up, needs your approval):
+- The grounding gain is real, and the refusal loss comes from the format. A next variant
+  would put the refusal decision first ("If no document answers, reply only with the
+  refusal sentence; otherwise Quote:/Answer:"), and the app could strip `Quote:` before the
+  exact refusal check.
+- It needs another ~107 min dev run. With a 3B model, a prompt rule may again be ignored.
+
+**Dev-only caveat:** dev has been used for every choice so far, and n = 7 for refusals
+(one question is 14 points).
