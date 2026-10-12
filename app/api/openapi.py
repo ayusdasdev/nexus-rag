@@ -46,6 +46,9 @@ _SPECIFIC: dict[str, tuple[str, ...]] = {
     "postMessage": ("404", "409", "500", "503"),
     "giveFeedback": ("404",),
     "getTrace": ("404",),
+    "createApiKey": ("403",),
+    "listApiKeys": ("403",),
+    "revokeApiKey": ("403", "404"),
 }
 
 _SSE_EVENTS: list[type[BaseModel]] = [

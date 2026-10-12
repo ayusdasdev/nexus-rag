@@ -1,3 +1,6 @@
+import hashlib
+import re
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -77,3 +80,24 @@ def decode_access_token(token: str) -> TokenPayload:
         )
     except (KeyError, ValueError) as exc:
         raise InvalidToken("malformed token payload") from exc
+
+
+# --- API keys (M9 9.2): tenant-bound, read-only credentials for the MCP server ----------
+
+API_KEY_PREFIX = "nxk_"
+_API_KEY = re.compile(r"nxk_[A-Za-z0-9_-]{43}")
+
+
+def new_api_key() -> tuple[str, str]:
+    """(the key, its SHA-256). The key is shown once; only the hash is stored. 256 random
+    bits, so a fast hash is enough (no password-style stretching needed)."""
+    key = API_KEY_PREFIX + secrets.token_urlsafe(32)
+    return key, hash_api_key(key)
+
+
+def hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode("ascii")).hexdigest()
+
+
+def looks_like_api_key(credential: str) -> bool:
+    return _API_KEY.fullmatch(credential) is not None

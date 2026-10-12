@@ -127,6 +127,7 @@ async def test_a_request_logs_its_request_id_and_resets_the_tenant(
 async def test_verifying_a_token_puts_its_tenant_into_the_log_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from fastapi import Request
     from fastapi.security import HTTPAuthorizationCredentials
 
     from app.api import deps
@@ -153,7 +154,8 @@ async def test_verifying_a_token_puts_its_tenant_into_the_log_context(
     token = set_tenant_id(None)
     try:
         await deps.get_current_user(
-            HTTPAuthorizationCredentials(scheme="Bearer", credentials="x")
+            HTTPAuthorizationCredentials(scheme="Bearer", credentials="x"),
+            request=Request({"type": "http", "method": "GET", "headers": []}),
         )
         assert current_tenant_id() == tenant
     finally:

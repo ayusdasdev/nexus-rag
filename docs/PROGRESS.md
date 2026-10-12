@@ -472,6 +472,21 @@ records absolute paths (`ce64389`).
 
   Known gap: the global trace purge (`purge_expired`) isn't scheduled (no cron or beat), so a
   tenant with no new answers keeps expired traces until it runs.
+Your decisions (2026-10-12): add `mcp==2.3.0` (official SDK); the MCP server authenticates
+with read-only, tenant-bound API keys.
+- [x] 9.2a Read-only API keys (migration `d340d515c9b9`).
+  - **Keys:** `nxk_` plus 256 random bits. Only the SHA-256 is stored; the key is shown once.
+    A composite FK ties the creator to the tenant.
+  - **Endpoints:** admins only (403 for members) create, list and revoke keys under
+    `/v1/api-keys`. A revoked or unknown key gets 401.
+  - **What a key can do:** it acts as a non-admin reader of its tenant (never admin, so no
+    debug or traces). In `get_current_user` it reaches only 4 operations: search, list
+    documents, get document, list chunks. Everything else, including future routes, is 403.
+  - **How the allowlist matches:** by (method, endpoint name). In FastAPI 0.142 a route's
+    path lacks the `/v1` prefix at dependency time (probed). A test pins the 4 names to their
+    paths.
+  - **Tests:** the existing `test_api_errors` call to `get_current_user` now passes a request,
+    with its assertions unchanged.
 - [ ] 9.2 `app/mcp_server/` (official MCP SDK): read-only `search_documents` and
   `list_documents`, no tenant argument, thin adapter over the REST API, capped output, stderr-only
   logs. Subprocess JSON-RPC tests and a test that no schema has tenant_id. New dep: `mcp`.

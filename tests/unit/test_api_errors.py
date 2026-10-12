@@ -4,7 +4,7 @@ Each raise must use a fresh exception, so repeated 404s/401s can't pin request d
 """
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.api import conversations, deps
@@ -25,13 +25,17 @@ def test_each_conversation_404_is_a_fresh_exception_with_the_same_body() -> None
     assert (first.status_code, first.detail) == (404, "Conversation not found")
 
 
+def _request() -> Request:
+    return Request({"type": "http", "method": "GET", "headers": []})
+
+
 @pytest.mark.asyncio
 async def test_repeated_bad_tokens_do_not_grow_one_exceptions_traceback() -> None:
     bad = HTTPAuthorizationCredentials(scheme="Bearer", credentials="not-a-jwt")
     depths = []
     for _ in range(5):
         with pytest.raises(HTTPException) as info:
-            await deps.get_current_user(bad)
+            await deps.get_current_user(bad, request=_request())
         assert info.value.status_code == 401
         depths.append(_depth(info.value))
 

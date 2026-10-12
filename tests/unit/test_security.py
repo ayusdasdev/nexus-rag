@@ -55,3 +55,28 @@ def test_jwt_leeway_defaults_to_5s_and_is_bounded() -> None:
         Settings(jwt_leeway_seconds=-1)
     with pytest.raises(ValidationError):
         Settings(jwt_leeway_seconds=61)
+
+
+# --- API keys (M9 9.2) -----------------------------------------------------------------
+
+
+def test_a_new_api_key_is_random_prefixed_and_only_its_hash_is_kept() -> None:
+    import re
+
+    from app.core.security import hash_api_key, new_api_key
+
+    key, digest = new_api_key()
+    other, _ = new_api_key()
+
+    assert re.fullmatch(r"nxk_[A-Za-z0-9_-]{43}", key)
+    assert key != other
+    assert digest == hash_api_key(key) and len(digest) == 64
+    assert key not in digest
+
+
+def test_only_strings_shaped_like_our_keys_count_as_api_keys() -> None:
+    from app.core.security import looks_like_api_key, new_api_key
+
+    assert looks_like_api_key(new_api_key()[0])
+    assert not looks_like_api_key("eyJhbGciOiJIUzI1NiJ9.e30.x")
+    assert not looks_like_api_key("nxk_short")

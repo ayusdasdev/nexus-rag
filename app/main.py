@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.api_keys import router as api_keys_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix="/v1")
     app.include_router(conversations_router, prefix="/v1")
     app.include_router(traces_router, prefix="/v1")
+    app.include_router(api_keys_router, prefix="/v1")
     install_openapi(app)
     # Added last, so it is the outermost middleware and sees every error.
     app.add_middleware(RequestIdMiddleware)

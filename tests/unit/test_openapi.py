@@ -163,3 +163,24 @@ def test_every_ref_in_the_spec_resolves() -> None:
     for ref in refs:
         assert ref.startswith("#/components/schemas/"), ref
         assert ref.rsplit("/", 1)[-1] in schemas, ref
+
+
+def test_the_api_key_allowlist_names_exactly_the_four_read_operations() -> None:
+    # A renamed endpoint would fail closed (403 for keys); this pins the intent.
+    from app.api.deps import API_KEY_OPERATIONS
+    from app.api.openapi import operation_id
+
+    found = {
+        (method.upper(), path)
+        for path, method, op in OPERATIONS
+        for allowed_method, name in API_KEY_OPERATIONS
+        if method.upper() == allowed_method
+        and op["operationId"] == operation_id(type("R", (), {"name": name})())
+    }
+
+    assert found == {
+        ("POST", "/v1/search"),
+        ("GET", "/v1/documents"),
+        ("GET", "/v1/documents/{document_id}"),
+        ("GET", "/v1/documents/{document_id}/chunks"),
+    }
