@@ -535,7 +535,20 @@ with read-only, tenant-bound API keys.
 - [ ] 9.3 `.github/workflows/ci.yml` (lint, unit, integration with service containers, docker
   build), `eval-smoke` workflow, pre-commit with ruff. CI can't run here, so it will be
   reported as unverified until you push.
-- [ ] 9.4 Multi-stage Dockerfile (non-root, pinned base, HEALTHCHECK, model cache as a
+- [x] 9.4 Container image and compose `app` profile (ADR-0015).
+  - **Image:** pinned digest, uid 10001, HEALTHCHECK, 1.02 GB.
+  - **Models:** the host caches, read-only.
+  - **Commands:** `make app-up` and `make app-down` (stops only the app services).
+  - **Verified end to end through the containers** (signup, upload, worker, search), plus:
+    non-root; no secrets, models or tests in the image; read-only mounts; missing-mount
+    errors; the production secret check.
+  - **Found and fixed:** the dense embedder now raises `ModelNotCached` when its cache
+    directory is missing.
+  - **Incident:** `docker compose --profile app down` removed the infrastructure containers.
+    The volumes were kept, `make up` recreated the containers, and the eval tenants are
+    intact (473/664/424 chunks equal Qdrant points). `app-down` exists so it can't happen
+    again.
+- [ ] 9.4 (guide text) Multi-stage Dockerfile (non-root, pinned base, HEALTHCHECK, model cache as a
   volume), `.dockerignore`, compose `app` profile. Pulling a base image is a download, so I'll
   ask first.
 - [ ] 9.5 README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
