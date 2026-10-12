@@ -265,3 +265,24 @@ def test_building_providers_loads_no_model(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert provider._model is None
     assert sparse._model is None
+
+
+# --- a cache directory that doesn't exist (a missing container mount, M9 9.4) ---------
+# fastembed creates its cache directory before looking for files; with the mount missing
+# that is a PermissionError on the read-only parent, not the "make fetch-models" hint.
+
+
+@pytest.mark.parametrize("embedder", [BgeEmbedder, Bm25Embedder])
+def test_a_missing_cache_directory_is_model_not_cached_and_nothing_is_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder: type
+) -> None:
+    missing = tmp_path / "not-mounted" / "fastembed"
+    monkeypatch.setattr(
+        embeddings,
+        "get_settings",
+        lambda: SimpleNamespace(fastembed_cache_dir=str(missing)),
+    )
+
+    with pytest.raises(ModelNotCached, match="make fetch-models"):
+        embedder().embed_documents(["x"])
+    assert not (tmp_path / "not-mounted").exists()

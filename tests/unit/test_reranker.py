@@ -121,3 +121,18 @@ def test_cross_encoder_raises_clear_error_when_cache_is_empty(
 
     with pytest.raises(ModelNotCached, match="make fetch-models"):
         CrossEncoderReranker().score("q", ["a"])
+
+
+def test_a_missing_cache_directory_is_model_not_cached_and_nothing_is_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "not-mounted" / "fastembed"
+    monkeypatch.setattr(
+        reranker,
+        "get_settings",
+        lambda: SimpleNamespace(fastembed_cache_dir=str(missing)),
+    )
+
+    with pytest.raises(ModelNotCached, match="make fetch-models"):
+        CrossEncoderReranker().score("q", ["a"])
+    assert not (tmp_path / "not-mounted").exists()

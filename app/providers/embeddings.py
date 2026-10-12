@@ -84,10 +84,15 @@ class BgeEmbedder:
 
     def _load(self) -> Any:
         if self._model is None:
+            cache_dir = get_settings().fastembed_cache_dir
+            # fastembed creates a missing cache directory before it looks for files: with a
+            # container's model mount absent that is a PermissionError, not this hint (M9).
+            if not Path(cache_dir).is_dir():
+                raise ModelNotCached(_hint(DENSE_MODEL))
             try:
                 self._model = TextEmbedding(
                     DENSE_MODEL,
-                    cache_dir=get_settings().fastembed_cache_dir,
+                    cache_dir=cache_dir,
                     local_files_only=True,
                 )
             except ValueError as exc:
