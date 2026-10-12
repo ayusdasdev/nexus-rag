@@ -421,6 +421,37 @@ Free setup only; ask before any run over 30 minutes.
 - [ ] The 8.7 top fix (quote-then-cite prompt) and the runner-up (weighted RRF), each measured on
   dev. The hold-out is spent for v1; any new final check needs a dataset v2.
 
+### Later: low findings from the M9 security review (2026-10-12)
+
+**Needed before any public deployment:** the per-tenant API-key cap and a scheduled trace purge
+(both below).
+- [ ] **Scheduled trace purge.** Nothing calls `trace_repository.purge_expired`, so an idle
+  tenant's questions and answers outlive `TRACE_RETENTION_DAYS`. Needs a Celery beat or cron
+  job. (#8)
+- [ ] **Per-tenant cap on API keys.** Key creation is admin-only but unbounded. (#6)
+- [ ] **MCP: validate document ids.** `document_id` from the API goes into a path unchecked;
+  validate it as a UUID first. This only matters against a malicious or compromised API. (#2)
+- [ ] **API keys looked up before rate limiting.** Any `nxk_`-shaped bearer costs a DB lookup
+  before rate limiting applies; consider a per-IP limit or a negative cache. (#4)
+- [ ] **API keys share their creator's bucket.** A runaway MCP client can throttle its
+  creator; give keys their own bucket keyed on `api_key_id`. (#5)
+- [ ] **Planted request ids.** A member can plant a trace under a known request id, and an
+  admin lookup returns the newest one. Return all matches, or look up by `(request_id,
+  user_id)`. (#7)
+- [ ] **Exception text in a log.** The pre-M9 `rate limiter unavailable (%s)` warning logs
+  the exception's text. Log by type only, and add a lint or test for `%s`-with-exception. (#10)
+- [ ] **A lighter lock.** `create_conversation` could lock the users row `FOR NO KEY UPDATE`
+  instead of `FOR UPDATE`. (#11)
+
+Fixed from the same review, each tests first and with lint, unit and integration green before
+its commit:
+- **#12, loopback ports:** postgres, redis and qdrant are published on 127.0.0.1 only
+  (`f705ef2`; verified: refused on the host's network address, and the app profile is ready).
+- **#1, MCP filenames:** they are framed as untrusted data like excerpts (`a342d24`).
+- **#3, MCP URLs:** a malformed `NEXUS_API_URL` gives one clean line, and credentials in it are
+  refused (`385b589`).
+- **#9, trace docstring:** corrected; answers can quote documents (`1817df6`).
+
 ## M9: Observability, MCP server, CI/CD, hardening (closed 2026-10-12)
 
 Your decisions (2026-10-11):
