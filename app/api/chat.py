@@ -168,6 +168,7 @@ async def chat(
         answer_max_tokens=settings.answer_max_tokens,
         deadline_seconds=settings.llm_answer_deadline_seconds,
         slots=slots,
+        answer_style=settings.answer_style,
     )
     write = partial(
         trace_repository.add_trace,

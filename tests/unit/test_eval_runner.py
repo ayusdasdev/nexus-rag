@@ -190,6 +190,7 @@ def test_the_run_records_config_dataset_seed_commit_and_timings(tmp_path: Path) 
         "expand": "none",
         "limit": 10,
         "dense_weight": 1.0,
+        "answer_style": "cite",
     }
     assert (meta["dataset"], meta["split_seed"], meta["git_sha"]) == (
         "test",
@@ -325,3 +326,12 @@ def test_dense_weight_is_an_override_with_plain_rrf_as_default() -> None:
     for bad in ("dense_weight=0", "dense_weight=11", "dense_weight=x"):
         with pytest.raises(ValueError):
             parse_overrides([bad])
+
+
+def test_answer_style_is_an_override_with_cite_as_default() -> None:
+    assert RunConfig().answer_style == "cite"
+    assert parse_overrides(["answer_style=quote_then_cite"]).answer_style == (
+        "quote_then_cite"
+    )
+    with pytest.raises(ValueError):
+        parse_overrides(["answer_style=poetry"])

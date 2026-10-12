@@ -211,3 +211,16 @@ def test_the_summary_counts_answers_with_malformed_citations() -> None:
     lines[1]["checks"]["citations"]["malformed"] = []
 
     assert runner.summarise_generation(lines)["answers_with_malformed_citations"] == 1
+
+
+def test_the_run_configs_answer_style_reaches_the_llm() -> None:
+    from app.services import prompts
+
+    llm = FakeLLM(["Ninety days [1]."])
+    search = build_search(
+        _retrieve(), TENANT, {DOC: "a.md"}, answer_fn=make_answerer(llm, SETTINGS)
+    )
+
+    asyncio.run(search(Q, RunConfig(limit=6, answer_style="quote_then_cite")))
+
+    assert llm.calls[0][0].content == prompts.load_prompt("rag_system_quote")

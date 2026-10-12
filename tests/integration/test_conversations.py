@@ -459,3 +459,21 @@ async def test_a_conversation_turn_is_traced_and_linked_to_its_answer(
     assert str(trace.message_id) == body["messages"][-1]["id"]
     assert trace.user_id == caller.user_id
     assert "rewrite" in trace.latency_ms
+
+
+async def test_a_conversation_turn_uses_the_answer_style_setting(
+    client: AsyncClient, new_tenant: NewTenant, fake_llm: FakeLLM
+) -> None:
+    from app.services import prompts
+
+    caller = await new_tenant()
+    url = f"/v1/conversations/{await _create(client, caller)}/messages"
+    app.dependency_overrides[get_settings] = lambda: get_settings().model_copy(
+        update={"answer_style": "quote_then_cite"}
+    )
+    try:
+        await client.post(url, headers=caller.headers, json={"question": Q1})
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert fake_llm.calls[-1][0].content == prompts.load_prompt("rag_system_quote")

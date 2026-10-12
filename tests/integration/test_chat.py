@@ -396,3 +396,25 @@ async def test_a_refusal_is_traced_too(
         [],
         None,
     )
+
+
+async def test_the_answer_style_setting_picks_the_system_prompt(
+    client: AsyncClient, store: VectorStore, llm: FakeLLM
+) -> None:
+    from app.services import prompts
+
+    tenant = await _tenant(client)
+    await _seed(client, store, tenant)
+    app.dependency_overrides[get_settings] = lambda: get_settings().model_copy(
+        update={"answer_style": "quote_then_cite"}
+    )
+    try:
+        await client.post(
+            CHAT_URL, headers=tenant["headers"], json={"question": QUESTION}
+        )
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+    await client.post(CHAT_URL, headers=tenant["headers"], json={"question": QUESTION})
+
+    assert llm.calls[0][0].content == prompts.load_prompt("rag_system_quote")
+    assert llm.calls[1][0].content == prompts.load_prompt("rag_system")

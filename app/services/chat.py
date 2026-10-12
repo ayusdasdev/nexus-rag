@@ -12,6 +12,7 @@ from contextlib import AbstractAsyncContextManager, nullcontext
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.config import AnswerStyle
 from app.core.tracing import record
 from app.providers.llm import (
     LLMError,
@@ -102,6 +103,7 @@ async def answer_events(
     slots: asyncio.Semaphore | None = None,
     history: Sequence[HistoryTurn] = (),
     rewritten_query: str | None = None,
+    answer_style: AnswerStyle = "cite",
 ) -> AsyncGenerator[ChatEvent, None]:
     """Events for one answer. items are tenant-scoped retrieval results, best first.
 
@@ -115,6 +117,7 @@ async def answer_events(
         [_context(item) for item in items],
         max_context_tokens=max_context_tokens,
         history=history,
+        answer_style=answer_style,
     )
     if built.sources and slots is not None and slots.locked():
         yield _BUSY_ERROR

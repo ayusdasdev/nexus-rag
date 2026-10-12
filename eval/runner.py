@@ -32,6 +32,7 @@ RUNNER_SEED = 0  # nothing in a run is random; recorded so that stays checkable
 
 Mode = Literal["dense", "sparse", "hybrid"]
 ExpandMode = Literal["none", "neighbors"]
+AnswerStyle = Literal["cite", "quote_then_cite"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,8 @@ class RunConfig:
     limit: int = 10
     # Weighted RRF (M10): the dense list's weight; BM25 stays at 1.0. 1.0 is plain RRF.
     dense_weight: float = 1.0
+    # The answer prompt for generation runs (M10): "cite" or "quote_then_cite".
+    answer_style: AnswerStyle = "cite"
 
 
 @dataclass(frozen=True)
@@ -68,8 +71,8 @@ SearchFn = Callable[[dict[str, Any], RunConfig], Coroutine[Any, Any, SearchResul
 
 
 def parse_overrides(pairs: Sequence[str]) -> RunConfig:
-    """--set key=value for mode, rerank, candidates, expand, limit, dense_weight; anything
-    else is refused."""
+    """--set key=value for mode, rerank, candidates, expand, limit, dense_weight,
+    answer_style; anything else is refused."""
     values: dict[str, Any] = {}
     for pair in pairs:
         key, sep, raw = pair.partition("=")
@@ -94,6 +97,12 @@ def parse_overrides(pairs: Sequence[str]) -> RunConfig:
             if not 0 < weight <= 10:
                 raise ValueError(f"dense_weight must be in (0, 10], not {weight}")
             values[key] = weight
+        elif key == "answer_style":
+            if raw not in ("cite", "quote_then_cite"):
+                raise ValueError(
+                    f"answer_style must be cite or quote_then_cite, not {raw!r}"
+                )
+            values[key] = raw
         elif key == "expand":
             if raw not in ("none", "neighbors"):
                 raise ValueError(f"expand must be none or neighbors, not {raw!r}")

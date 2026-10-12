@@ -256,6 +256,7 @@ async def post_message(
         answer_max_tokens=settings.answer_max_tokens,
         deadline_seconds=settings.llm_answer_deadline_seconds,
         slots=slots,
+        answer_style=settings.answer_style,
         history=history,
         rewritten_query=query,
     )

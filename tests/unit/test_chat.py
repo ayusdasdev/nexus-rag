@@ -507,3 +507,25 @@ async def test_a_refusal_without_sources_records_no_generation_span() -> None:
         await _events([], FakeLLM(["unused"]))
 
     assert trace.spans == []
+
+
+@pytest.mark.asyncio
+async def test_answer_events_send_the_chosen_answer_style_to_the_llm() -> None:
+    from app.services import prompts
+
+    llm = FakeLLM(["Two hours [1]."])
+
+    events = [
+        e
+        async for e in answer_events(
+            "How long?",
+            [_hit("Charging takes two hours.")],
+            llm,
+            max_context_tokens=2000,
+            answer_max_tokens=64,
+            answer_style="quote_then_cite",
+        )
+    ]
+
+    assert events[-1].event == "done"
+    assert llm.calls[0][0].content == prompts.load_prompt("rag_system_quote")

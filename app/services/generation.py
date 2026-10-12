@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Literal
 from uuid import UUID
 
+from app.core.config import AnswerStyle
 from app.providers.llm import ChatMessage
 from app.services.prompts import load_prompt
 
@@ -94,6 +95,11 @@ def _document_block(number: int, chunk: ContextChunk) -> str:
     return "\n".join(lines)
 
 
+# The system prompt of each answer style (app/prompts/<name>.md). The rules that keep
+# documents as data (ADR-0007) are the same in both; a test checks they stay verbatim.
+ANSWER_PROMPTS = {"cite": "rag_system", "quote_then_cite": "rag_system_quote"}
+
+
 def build_messages(
     question: str,
     chunks: Sequence[ContextChunk],
@@ -101,6 +107,7 @@ def build_messages(
     max_context_tokens: int,
     count_tokens: Callable[[str], int] = approx_tokens,
     history: Sequence[HistoryTurn] = (),
+    answer_style: AnswerStyle = "cite",
 ) -> BuiltPrompt:
     """System rules plus one user message with numbered documents and the question.
 
@@ -108,6 +115,9 @@ def build_messages(
     heading and text); one that doesn't fit is skipped and later, smaller ones may still
     go in. Numbering is contiguous over what was sent.
     """
+    if answer_style not in ANSWER_PROMPTS:
+        raise ValueError(f"unknown answer style: {answer_style!r}")
+    system_prompt = ANSWER_PROMPTS[answer_style]
     sources: list[ContextChunk] = []
     # History (already trimmed by the caller) shares the budget and is paid for first.
     used = sum(count_tokens(turn.content) for turn in history)
@@ -126,7 +136,7 @@ def build_messages(
     user = _SLOT.sub(lambda match: values[match.group(1)], load_prompt("rag_user"))
     return BuiltPrompt(
         messages=[
-            ChatMessage(role="system", content=load_prompt("rag_system")),
+            ChatMessage(role="system", content=load_prompt(system_prompt)),
             *(
                 ChatMessage(role=t.role, content=_neutralise(t.content))
                 for t in history

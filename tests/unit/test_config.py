@@ -102,3 +102,10 @@ def test_rrf_dense_weight_defaults_to_plain_rrf_and_is_bounded() -> None:
     for bad in (0.0, -1.0, 10.5):
         with pytest.raises(ValidationError):
             Settings(rrf_dense_weight=bad)
+
+
+def test_answer_style_defaults_to_cite_and_accepts_quote_then_cite() -> None:
+    assert Settings(_env_file=None).answer_style == "cite"
+    assert Settings(answer_style="quote_then_cite").answer_style == "quote_then_cite"
+    with pytest.raises(ValidationError):
+        Settings(answer_style="poetry")

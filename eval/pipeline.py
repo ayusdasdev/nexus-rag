@@ -11,10 +11,10 @@ import json
 import time
 from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from app.core.config import Settings
+from app.core.config import AnswerStyle, Settings
 from app.providers.llm import LLMProvider
 from app.services.chat import answer_events
 from app.services.retrieval import RetrievedChunk, RetrieveResult, expanded_text
@@ -26,7 +26,7 @@ RERANK_CACHE = ROOT / "eval" / "state" / "rerank_cache.sqlite"
 
 RetrieveFn = Callable[..., Awaitable[RetrieveResult]]
 AnswerFn = Callable[
-    [str, Sequence[RetrievedChunk]], Coroutine[Any, Any, dict[str, Any]]
+    [str, Sequence[RetrievedChunk], str], Coroutine[Any, Any, dict[str, Any]]
 ]
 
 
@@ -40,7 +40,9 @@ def make_answerer(llm: LLMProvider, settings: Settings) -> AnswerFn:
             f"eval generation runs on ollama only; LLM_PROVIDER is {settings.llm_provider!r}"
         )
 
-    async def answer(question: str, items: Sequence[RetrievedChunk]) -> dict[str, Any]:
+    async def answer(
+        question: str, items: Sequence[RetrievedChunk], answer_style: str = "cite"
+    ) -> dict[str, Any]:
         started = time.perf_counter()
         out: dict[str, Any] = {
             "text": None,
@@ -62,6 +64,7 @@ def make_answerer(llm: LLMProvider, settings: Settings) -> AnswerFn:
             max_context_tokens=settings.max_context_tokens,
             answer_max_tokens=settings.answer_max_tokens,
             deadline_seconds=settings.llm_answer_deadline_seconds,
+            answer_style=cast(AnswerStyle, answer_style),
         ):
             if event.event == "sources":
                 out["sources"] = [s["text"] for s in event.data["sources"]]
@@ -119,7 +122,9 @@ def build_search(
         stages = {s.name: s.ms for s in result.trace.stages} if result.trace else {}
         answer = None
         if answer_fn is not None:
-            answer = await answer_fn(question["question"], result.items)
+            answer = await answer_fn(
+                question["question"], result.items, config.answer_style
+            )
             stages["generate"] = answer["generate_ms"]
         return SearchResult(hits=hits, stages_ms=stages, answer=answer)
 

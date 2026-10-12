@@ -564,3 +564,36 @@ def test_history_text_cannot_forge_our_tags() -> None:
 
     assert "</document>" not in built.messages[1].content
     assert "<question>" not in built.messages[1].content
+
+
+# --- answer style (M10) ---------------------------------------------------------------
+
+
+def test_by_default_the_system_prompt_is_the_cite_prompt() -> None:
+    chunks = [_chunk("Charge for 2 hours.")]
+
+    default = build_messages("Q?", chunks, max_context_tokens=1000)
+    explicit = build_messages(
+        "Q?", chunks, max_context_tokens=1000, answer_style="cite"
+    )
+
+    assert default.messages == explicit.messages
+    assert default.messages[0].content == prompts.load_prompt("rag_system")
+
+
+def test_quote_then_cite_changes_only_the_system_prompt() -> None:
+    chunks = [_chunk("Charge for 2 hours.")]
+
+    default = build_messages("Q?", chunks, max_context_tokens=1000)
+    quote = build_messages(
+        "Q?", chunks, max_context_tokens=1000, answer_style="quote_then_cite"
+    )
+
+    assert quote.messages[0].content == prompts.load_prompt("rag_system_quote")
+    assert quote.messages[1:] == default.messages[1:]
+    assert quote.sources == default.sources
+
+
+def test_an_unknown_answer_style_is_refused() -> None:
+    with pytest.raises(ValueError):
+        build_messages("Q?", [], max_context_tokens=10, answer_style="poetry")  # type: ignore[arg-type]
