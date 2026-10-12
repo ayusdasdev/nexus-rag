@@ -537,3 +537,44 @@ Individual cases, not rates (n = 1-4 per type):
 - unanswerable: q054 and q060 (retrieval only, no refusal scored).
 
 Nothing was tuned, re-run or changed after these numbers. They are final for dataset v1.
+
+## M10-1: weighted RRF, dense 1.5 and 2.0 vs BM25 1.0 (hypothesis written before any run)
+
+Date: 2026-10-12. Dev split only (the v1 hold-out is spent). Retrieval only. `RRF_DENSE_WEIGHT`
+(default 1.0, plain RRF; tests prove the default is unchanged). Weights 1.5 and 2.0 were
+chosen before any run (your decision).
+
+**Why** (failure analysis, bucket D): in 5 of the 8 ranking failures the gold chunk was a
+dense-only hit that plain RRF ranked below chunks both lists found: q029, q031, q044 (dense
+rank 1, fused 27), q049, q061.
+
+**Runs:**
+- **Main:** E3 (hybrid, rerank on, candidates 40, expand none, limit 10) with dense weight
+  1.5 and 2.0. Tags `M10-rrf1.5`, `M10-rrf2.0`. This is what the final configuration
+  (ADR-0012) would use.
+- **Diagnostic:** E2 (hybrid, rerank off) with the same two weights. Tags
+  `M10-e2-rrf1.5`, `M10-e2-rrf2.0`. Seconds each, no reranking. They show the fusion effect
+  the reranker hides.
+
+**Mechanism, before predictions:**
+- With rerank on, the final order is the reranker's. Fusion only decides which candidates
+  enter the reranker's 50-item window, out of up to 80 fused.
+- In the E3 trace, 4 of the 5 dense-only golds were already inside the window and the
+  reranker itself put them low: q029 at 24, q031 at 33, q044 span 2 at 23, q049 span 1 at
+  11. For q061, fused rank 40 means it was in the window at both, but where the reranker put
+  it is unclear from the trace.
+
+**Predictions:**
+- **E3 + weights:** about E3 at both weights, within ±1 question at every k (dev E3: R@1 20,
+  R@3 27, R@5 31, R@10 34 of 41; MRR 0.635). None of the 5 cases gets into the top 6. If the
+  window loses a gold chunk that BM25 alone found, exact-token could drop by 1; otherwise it
+  stays at 7/7 at R@10.
+- **E2 + weights** (dev E2: R@1 17, R@3 28, R@10 34, MRR 0.628): fused ranks of dense-only
+  golds improve. At 2.0, q044 span 2 (dense rank 1) moves into the top 10. Paraphrase R@10 is
+  +1 or +2 (measured E2: R@3 4/10, R@10 6/10, MRR 0.325). Exact-token MRR may drop from
+  0.905, since BM25 matters most there.
+- **Time:** E3 runs 5-20 min each (only new reranker pairs are uncached, about 0.9 s each);
+  E2 runs under 1 min.
+- **Decision rule, fixed now:** keep a weight in the final configuration only if E3 plus that
+  weight beats E3 by at least 2 questions at R@3 or R@10 with no type losing more than 1.
+  Otherwise keep 1.0: the default stays, and "didn't help" is recorded.
