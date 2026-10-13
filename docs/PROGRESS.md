@@ -418,8 +418,10 @@ Free setup only; ask before any run over 30 minutes.
 - [ ] `.claude/commands/run-eval.md`, `.claude/skills/eval-report/SKILL.md`, analyst subagent.
 - [ ] Parent-child chunking (E9).
 - [ ] Overlap sweep (E5).
-- [ ] The 8.7 top fix (quote-then-cite prompt) and the runner-up (weighted RRF), each measured on
-  dev. The hold-out is spent for v1; any new final check needs a dataset v2.
+- [x] The 8.7 top fix (quote-then-cite prompt) and the runner-up (weighted RRF), each measured on
+  dev: done in M10, neither adopted (M10-1, M10-2, M10-3, ADR-0016).
+- [ ] Dataset v2 for a fresh final check. The v1 hold-out is spent; deferred by you, since no
+  default changed in M10.
 
 ### Later: low findings from the M9 security review (2026-10-12)
 
@@ -579,16 +581,16 @@ with read-only, tenant-bound API keys.
     The volumes were kept, `make up` recreated the containers, and the eval tenants are
     intact (473/664/424 chunks equal Qdrant points). `app-down` exists so it can't happen
     again.
-- [ ] 9.4 (guide text) Multi-stage Dockerfile (non-root, pinned base, HEALTHCHECK, model cache as a
-  volume), `.dockerignore`, compose `app` profile. Pulling a base image is a download, so I'll
-  ask first.
+- [x] 9.4 (guide text) Multi-stage Dockerfile (non-root, pinned base, HEALTHCHECK, model cache as a
+  volume), `.dockerignore`, compose `app` profile: done, see the 9.4 entry above (ADR-0015).
 - [x] 9.5 README rewritten from the repo: pitch, architecture, run (local and containers),
   60-second CLI demo, MCP, trace debugging, the M8 evaluation (unchanged), the ADR table,
   tenant isolation and measured limitations. Only verified facts; one TODO (fresh-clone
   `app-up`). `docs/security.md` covers the threat model, every control with `file:line` and
   its proving test (each reference checked against the repo), and the known gaps.
-- [ ] 9.5 (guide text) README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
-  (controls with file:line and the proving test).
+- [x] 9.5 (guide text) README (only verifiable facts, TODO for anything unmeasured) and `docs/security.md`
+  (controls with file:line and the proving test): done, see the 9.5 entry above. Its one TODO
+  (fresh-clone `app-up`) was verified and removed in M11 (`c51177b`).
 - [x] M9 security review (security-reviewer subagent on `756f623..HEAD`, focused on the MCP
   server, API keys and trace data): no critical, high or medium findings, so no fix was
   required. Low and info items, for you:
@@ -641,7 +643,7 @@ with read-only, tenant-bound API keys.
   - **Decision:** fails 2 of 4 conditions, so `cite` stays the default (ADR-0016).
 - [x] Dataset v2 stays deferred, since no default changed (your instruction).
 
-## M11: Packaging
+## M11: Packaging (closed 2026-10-13)
 
 Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md` and
 `docs/interview.md`, delivered one item at a time.
@@ -698,5 +700,42 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
   - **Tags:** [dev], [n = ...] and [unverified] on every claim that needs one.
   - **Plus a "don't claim" list:** a judge faithfulness score, cost accounting, embedding
     throughput, production traffic, CI on GitHub.
-- [ ] Item 5: final hygiene: secrets scan of the tree and history, untracked `.env` and
-  `data/`, a clean tree, open Later items.
+- [x] Item 5: final hygiene (2026-10-13, at `caace5e`).
+  - **gitleaks v8.21.2** (container, read-only mount, redacted) over all 225 commits: 2
+    findings, both false positives. Each is the same schema example, `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`,
+    only the base64 of `{"alg":"HS256","typ":"JWT"}`, in `app/schemas/auth.py` and
+    `docs/openapi.json`.
+  - **Targeted grep of `git log -p --all`:** 0 hits for `nxk_` keys, full JWTs, Anthropic,
+    AWS and HF tokens, private keys, valued `JWT_SECRET` / `ANTHROPIC_API_KEY`, the eval
+    password, and the two demo passwords.
+  - **The committed dev JWT default** (`config.py:69`) is deliberate: production refuses it,
+    and any secret under 32 characters (tested).
+  - **Tracking:** `.env`, `data/`, `eval/state/eval_password`, the rerank cache, uploads and
+    model weights are not tracked and never were; all are ignored. The tree was clean at the
+    scan.
+  - **Known, unchanged:** the eval run files hold the eval tenant ids, and one pre-`ce64389`
+    hold-out `run.json` holds an absolute local path (security.md, known gaps).
+
+**M11 closed (2026-10-13).** Every box still open in this file:
+- **Needed before any public deployment** (M9 review lows): the scheduled trace purge and the
+  per-tenant API-key cap.
+- **Other M9 review lows:**
+  - MCP document-id validation;
+  - API-key lookup before rate limiting;
+  - keys sharing their creator's bucket;
+  - planted request ids;
+  - exception text in one log line;
+  - a lighter row lock.
+- **From the M4 review:**
+  - a concurrency cap around rerank (the per-tenant rate limit covers it today);
+  - three missing tests (neighbors with `document_ids`; `fetch_neighbors` gets the caller's
+    tenant; `candidates=101` -> 422 over HTTP).
+- **Deferred from M7 and M8:**
+  - the optional `Idempotency-Key` on uploads;
+  - the eval API, its migration and its commands;
+  - parent-child chunking (E9); the overlap sweep (E5);
+  - dataset v2.
+- **Never verified:**
+  - CI on GitHub (9.3);
+  - Claude Code MCP registration;
+  - a real run of the follow-up rewrite in the demo.
