@@ -341,3 +341,27 @@ def test_answer_style_override_accepts_the_refusal_first_variant() -> None:
     assert parse_overrides(["answer_style=quote_refusal_first"]).answer_style == (
         "quote_refusal_first"
     )
+
+
+def _strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in _strings(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in _strings(v)]
+    return []
+
+
+def test_no_committed_run_records_an_absolute_local_path() -> None:
+    # A path like /home/<user>/... would publish the author's username with the repo.
+    runs = sorted((runner.ROOT / "eval" / "runs").glob("*/run.json"))
+    assert runs
+    absolute = {
+        str(path.relative_to(runner.ROOT)): s
+        for path in runs
+        for s in _strings(json.loads(path.read_text()))
+        if s.startswith(("/", "~")) or s[1:3] in (":\\", ":/")
+    }
+
+    assert absolute == {}

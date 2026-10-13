@@ -5,7 +5,7 @@
  "git_sha": "e480f179c54b9dfd386ed8bac16e32e2c07197bc",
  "git_dirty": false,
  "generate": false,
- "state": "/home/ayusd/projects/nexus-rag/eval/state/eval_tenant.json",
+ "state": "eval/state/eval_tenant.json",
  "tenant_id": "95e3270d-a0dc-4d06-80c8-9bfed69486c3",
  "config": {
   "mode": "hybrid",
