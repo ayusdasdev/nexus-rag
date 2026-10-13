@@ -44,3 +44,6 @@ eval/state/
 
 # The build guide is kept locally only; the frozen eval corpus copy is eval/corpus/guide.pdf
 docs/guide.pdf
+
+# Windows download markers (NTFS alternate streams copied into WSL)
+*:Zone.Identifier
