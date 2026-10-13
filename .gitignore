@@ -41,3 +41,6 @@ data/
 
 # M8: local eval state (tenant ids for this database) and raw run output
 eval/state/
+
+# The build guide is kept locally only; the frozen eval corpus copy is eval/corpus/guide.pdf
+docs/guide.pdf

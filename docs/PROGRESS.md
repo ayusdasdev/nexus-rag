@@ -1,6 +1,7 @@
 # Progress: Nexus RAG Build-Along
 
-Checklist of everything left from `docs/guide.pdf` (rest of M4 through M11), plus open items.
+Checklist of everything left from the build guide (`eval/corpus/guide.pdf`; the local
+`docs/guide.pdf` copy is no longer tracked) (rest of M4 through M11), plus open items.
 Updated at the end of every milestone. Each milestone ends with `make lint`, `make test` and
 `make test-int` green, then small Conventional Commits. Nothing is pushed.
 
