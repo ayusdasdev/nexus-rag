@@ -675,7 +675,16 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
     tenants are intact: 473/664/424 chunks in both Postgres and Qdrant.
   - **Content:** M10 results with raw counts and the dev-only caveat, ADR-0016, updated
     limits, and current test counts.
-- [ ] Item 2: `docs/demo.md`, a 5-minute demo with every step run once.
+- [x] Item 2: `docs/demo.md`. Six steps run once in order (2026-10-13, `c51177b`): 3 min 33 s,
+  no clock drift, on AC.
+  - **Results:** signup 201; upload ready in 14.5 s; search 32 s; ask 150 s; B gets a 404 on
+    A's document and an empty search, and its refusal takes 0.38 s; MCP initialize,
+    tools/list and search_documents (10.2 s); a key DELETE gets 403, revoke 204. The key
+    and password appear in no log.
+  - **The answer was correct but uncited.** Kept and explained, by your choice: it's the
+    measured 6/40 weakness.
+  - **Not run:** the follow-up with a rewritten query (no real run is recorded; it's covered
+    by integration tests) and Claude Code registration.
 - [ ] Item 3: `docs/interview.md`, talking points, Q&A, and what didn't work.
 - [ ] Item 4: resume bullets, measured numbers only, with dev-only claims marked.
 - [ ] Item 5: final hygiene: secrets scan of the tree and history, untracked `.env` and

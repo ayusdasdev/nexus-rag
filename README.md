@@ -113,6 +113,8 @@ nexus history
 ```
 
 A real, timed run of these commands is in [docs/cli-demo.md](docs/cli-demo.md).
+A 5-minute demo script (signup, upload, search, a streamed answer, tenant isolation, the MCP
+server), with the real output of one run, is in [docs/demo.md](docs/demo.md).
 
 ## Use it from an agent (MCP)
 
