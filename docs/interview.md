@@ -20,18 +20,22 @@ Don't drop the tags when you're asked about a number.
 
 - Built **Nexus RAG**, a multi-tenant document Q&A API (FastAPI, Postgres, Qdrant, Celery,
   Redis) with hybrid dense + BM25 retrieval, RRF fusion and cross-encoder reranking.
-  - Raised Recall@5 from 24/41 to 31/41 and MRR from 0.532 to 0.635 over dense-only retrieval
-    on a 60-question labelled set **[dev]**.
+  - Raised Recall@5 from 0.630 to 0.780 (questions with every gold span in the top 5: 24/41
+    to 31/41) and MRR from 0.532 to 0.635 over dense-only retrieval, on the 41 answerable dev
+    questions of a 60-question labelled set **[dev]**.
   - On the 12-question hold-out, run once: R@5 9/10, MRR 0.670 **[n = 10]**.
 - Enforced tenant isolation with:
   - token-derived tenant identity;
   - a single filtered vector-store gateway, enforced by import-linter contracts;
   - tenant-scoped Postgres queries and composite foreign keys.
-  - Verified by 26 cross-tenant and IDOR integration tests plus 11 API-key tests. All run in
-    the CI workflow **[CI unverified on GitHub]**.
+  - Verified by 26 cross-tenant and IDOR integration tests plus 21 API-key tests (collected
+    with parametrization; 14 and 11 test functions). All run in the CI workflow **[CI
+    unverified on GitHub]**.
 - Designed a grounded, streaming (SSE) answer pipeline with server-validated citations, an
   explicit refusal path and query rewriting for multi-turn chat.
-  - Citations: 40 valid, 0 invalid numeric citations.
+  - Citations: 40 valid, 0 invalid numeric citations **[dev]**; but 6/40 answers are
+    uncited, only 15/40 cite a gold source, and 4 contain malformed brackets the numeric check
+    can't see.
   - Refusals: 4/7 exact correct refusals and 1/41 false refusals **[dev, n = 7 for
     refusals]**.
   - Hand-graded: 10/15 answers faithful **[n = 15, one grader]**.
@@ -40,7 +44,7 @@ Don't drop the tags when you're asked about a number.
   prompts, each with a hypothesis and decision rule committed before the run.
   - Rejected an LLM judge that failed calibration against hand grades: 7/15 agreement vs
     10/15 for a constant **[n = 15]**.
-  - Documented 16 decisions as ADRs.
+  - Documented 17 decisions as ADRs.
 - Exposed retrieval to coding agents as a read-only, tenant-bound MCP server.
   - Instrumented every answer with a query trace (per-stage latency, candidate ids and scores,
     model).
@@ -73,7 +77,7 @@ Don't drop the tags when you're asked about a number.
 3. **The interesting engineering:**
    - **Isolation is an enforced, tested property, not a convention.** The tenant comes only
      from the token, and one gateway filters every Qdrant call. It's proved by 26
-     cross-tenant tests plus 11 API-key tests.
+     cross-tenant tests plus 21 API-key tests (collected, with parametrization).
    - **Choices came from an evaluation set.** Hybrid + rerank lifted Recall@5 from 24/41
      (dense only) to 31/41, and MRR from 0.532 to 0.635 on dev.
 4. **What's next:**
@@ -104,7 +108,7 @@ Draw the README's Mermaid diagram:
   4. **Tests:**
      - `tests/integration/test_isolation.py` (7 functions) and `test_conversations_idor.py`
        (7 functions): 26 collected tests with parametrization;
-     - `test_api_keys.py` (11 functions).
+     - `test_api_keys.py` (11 functions, 21 collected tests).
 
 ## Numbers to know (raw counts, sources)
 
@@ -118,7 +122,7 @@ Draw the README's Mermaid diagram:
 | Hold-out, E3, run once | R@5 9/10, R@10 9/10, MRR 0.670 (one question = 10 points) | `eval/runs/E3-holdout/` |
 | Correct refusals (exact) | 4/7; 2 near-refusals, 1 missed | `eval/runs/E3-gen/rescore.json` |
 | False refusals | 1/41 | same |
-| Citations | 40 valid, 0 invalid; 6/40 answers uncited; 15/40 cite a gold source | same |
+| Citations | 40 valid, 0 invalid; 6/40 answers uncited; 15/40 cite a gold source; 4 answers with malformed brackets | same; `docs/decisions/eval-log.md` |
 | Facts | all reference facts found in 7 of 23 checkable answers, mean share 0.49 | same |
 | LLM judge (3B) vs 15 hand grades | correctness 7/15 vs 10/15 for always answering "2"; faithfulness 8/15 vs 10/15 | ADR-0011 |
 | Hand grades | n = 15: correctness 0/1/2 = 1/4/10; faithful 10/15 | README, `eval/calibration/`, ADR-0011 |
