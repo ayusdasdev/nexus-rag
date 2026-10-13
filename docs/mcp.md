@@ -86,5 +86,13 @@ raw output is in `~/nexus-rag-test-logs/2026-10-12-mcp-verify.out`.
   server's stdout or stderr, nor in the API's log, which also held no document text.
 - **Revocation:** after the admin revoked the key (204), its next request got 401.
 
-**Not run here:** the Inspector (step 3, `npx` downloads a package) and Claude Code
-registration (step 4, it edits your Claude config). Run them yourself.
+**Claude Code, real run, 2026-10-13** ([demo.md](demo.md), step 8):
+- The server was loaded headlessly with `claude -p --mcp-config <scratch file>
+  --strict-mcp-config --no-session-persistence`, so no config was edited.
+- It connected; Claude Code called `search_documents` and answered with the right excerpt
+  label (`01_text_heavy.pdf#9`).
+- The key was revoked afterwards (204, then 401) and appeared in no log.
+
+**Not run here:**
+- the Inspector (step 3, `npx` downloads a package);
+- a permanent `claude mcp add` (step 4, it edits your Claude config). Run it yourself.

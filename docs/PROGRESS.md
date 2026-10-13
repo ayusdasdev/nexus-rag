@@ -735,7 +735,20 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
   - the eval API, its migration and its commands;
   - parent-child chunking (E9); the overlap sweep (E5);
   - dataset v2.
-- **Never verified:**
-  - CI on GitHub (9.3);
-  - Claude Code MCP registration;
-  - a real run of the follow-up rewrite in the demo.
+- **Never verified:** CI on GitHub (9.3).
+
+**Wrap-up (2026-10-13, after the M11 close):**
+- **Images:** the mermaid-cli and gitleaks images were removed; `docker images` shows neither.
+- **Git:** the tree was clean, and there is no remote, so nothing was ever pushed.
+- **Demo step 7, the follow-up with a rewritten query, run for real:**
+  - searched "How long are readings kept? And what about alert events?";
+  - answered "Alert events are kept for one year." (correct, uncited);
+  - 68 s, after a 186 s first turn.
+- **Demo step 8, Claude Code with the MCP server, run for real:** headless `claude -p` with
+  `--mcp-config` and `--strict-mcp-config`, no session saved, no config edited.
+  - The server connected, and `search_documents` was called.
+  - The answer cited `01_text_heavy.pdf#9` (Data retention), correctly.
+  - The key was revoked (204, then 401) and appeared in no log.
+  - `~/.claude.json` had no MCP server registered, before or after.
+- **Still not run:** a permanent `claude mcp add` (it edits your config; exact commands are in
+  `docs/demo.md` step 8) and the MCP Inspector.

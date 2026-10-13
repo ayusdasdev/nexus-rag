@@ -1,9 +1,14 @@
 # A 5-minute demo
 
-Six steps: signup, upload, search, a cited answer, tenant isolation, and the MCP server.
-Every command below was run once, in this order, on 2026-10-13 at `c51177b`. The output is
-copied from that run. Only secrets are replaced (`...` for emails, passwords, tokens and the
-key) and long lines cut. The whole run took 3 min 33 s, 2.5 min of it the one LLM answer.
+The core demo is six steps: signup, upload, search, a streamed answer, tenant isolation,
+and the MCP server.
+- **Steps 1-6** were run once, in this order, on 2026-10-13 at `c51177b`. The whole run
+  took 3 min 33 s, 2.5 min of it the one LLM answer.
+- **Two extra steps,** a follow-up question (7) and Claude Code using the MCP server (8),
+  were run later that day at `dd139cb`.
+
+The output is copied from those runs. Only secrets are replaced (`...` for emails,
+passwords, tokens and the key) and long lines cut.
 
 **Setup:** local stack (`make up`, `make dev`, `make worker`), default configuration (hybrid
 retrieval, rerank on, chat limit 6), Ollama `llama3.2:3b` on a 4-core laptop CPU, plugged in.
@@ -200,10 +205,8 @@ $ nexus docs   (as A: the document is still there)
 
 - **Hygiene, checked after the run:** the key appears 0 times in the MCP server's stderr and
   0 times in the API log, and the password in 0 log files.
-- **What this run didn't do:** registering the server in Claude Code
-  (`claude mcp add ...`, see [mcp.md](mcp.md)), because it edits your Claude config. In a live
-  demo, ask Claude Code "using the nexus tools, how do I calibrate a widget?" instead of the
-  JSON-RPC client.
+- **In a live demo,** ask Claude Code instead of using the JSON-RPC client: step 8 below is
+  a real run of exactly that.
 
 ## If there's time: evaluation and one failure (1 min)
 
@@ -213,11 +216,123 @@ $ nexus docs   (as A: the document is still there)
   The gold source was in the prompt, but the answer cited a different one. The uncited
   answer in step 4 is the same weakness.
 
+## 7. A follow-up question: the query is rewritten (4 min; run on 2026-10-13 at `dd139cb`)
+
+*Say:* a follow-up like "and what about alert events?" means nothing to a search engine on
+its own. The default rule rewrite (no LLM call, ADR-0009) sees the leading "and" and
+searches for the previous question plus the follow-up. The CLI prints the query used.
+
+Setup, not shown: a new tenant (Initech), logged in, with `01_text_heavy.pdf` uploaded and
+ready.
+
+```text
+$ curl -X POST http://localhost:8000/v1/conversations -H 'Authorization: Bearer <token>' -d '{"title":"Data retention"}'
+HTTP 201
+{'id': '1de5d6c0-6d38-4ab9-ba0d-85671df602a8', 'title': 'Data retention'}
+[exit 0, 0.21 s]
+
+$ nexus ask "How long are readings kept?" --conversation 1de5d6c0-6d38-4ab9-ba0d-85671df602a8
+Searched for: How long are readings kept?
+Readings are kept for ninety days at full resolution and for two years as hourly averages.
+Answer: Readings are kept for ninety days at full resolution and for two years as hourly averages.
+Sources:
+  [1] Nexus Widgets Deployment Guide > 8. Data retention
+  [2] Nexus Widgets Deployment Guide > 5. Alerts > 5.1 Writing rules
+  [3] Nexus Widgets Deployment Guide > 11. Frequently asked questions
+  [4] Nexus Widgets Deployment Guide > 6. Network and security
+  [5] Nexus Widgets Deployment Guide > 5. Alerts > 5.2 Choosing durations
+  [6] Nexus Widgets Deployment Guide > 4. Calibration
+[exit 0, 186.37 s]
+
+$ nexus ask "And what about alert events?" --conversation 1de5d6c0-6d38-4ab9-ba0d-85671df602a8
+Searched for: How long are readings kept? And what about alert events?
+Alert events are kept for one year.
+Answer: Alert events are kept for one year.
+Sources:
+  [1] Nexus Widgets Deployment Guide > 8. Data retention
+  [2] Nexus Widgets Deployment Guide > 5. Alerts > 5.1 Writing rules
+  [3] Nexus Widgets Deployment Guide > 5. Alerts > 5.2 Choosing durations
+  [4] Nexus Widgets Deployment Guide > 11. Frequently asked questions
+  [5] Nexus Widgets Deployment Guide > 6. Network and security
+  [6] Nexus Widgets Deployment Guide > 7. Maintenance
+[exit 0, 67.96 s]
+
+$ nexus history --conversation 1de5d6c0-6d38-4ab9-ba0d-85671df602a8
+user: How long are readings kept?
+assistant: Readings are kept for ninety days at full resolution and for two years as hourly averages.
+user: And what about alert events?
+assistant: Alert events are kept for one year.
+[exit 0, 0.35 s]
+```
+
+- The rewritten query found the right section again ([1] Data retention). The answer is
+  correct: the guide says "Alert events are kept for one year".
+- **Both answers are uncited,** like step 4: the same measured weakness.
+- The follow-up took 68 s against 186 s for the first turn. The reranker and model were warm,
+  and the answer is short; this is one run, not a measured speed-up.
+- The first turn shows "Searched for" too: a conversation turn always reports the query it
+  used, and the first is never rewritten.
+
+## 8. Claude Code uses the MCP server (20 s; run on 2026-10-13 at `dd139cb`)
+
+*Say:* the same read-only key lets a coding agent search this tenant's documents as a tool.
+
+To leave the Claude Code config untouched, the server was not registered with `claude mcp
+add`. It was loaded for one headless session from a scratch file:
+- `--mcp-config` with `--strict-mcp-config` loads that file only;
+- `--no-session-persistence` saves nothing.
+
+The scratch file (mode 0600) held the same server entry as [mcp.md](mcp.md) step 4:
+`uv run --directory <repo> python -m app.mcp_server`, with `NEXUS_API_URL` and a fresh key of
+tenant Initech (created as admin: HTTP 201, prefix `nxk_uWAE1P88`, scope `read`).
+
+```text
+$ cd <scratch dir>     # so this repo's own hooks don't run in the headless session
+$ claude -p "Using the nexus tools, how long are readings and alert events kept? Answer in two sentences and cite the excerpt labels you used." \
+    --mcp-config mcp.json --strict-mcp-config \
+    --allowedTools "mcp__nexus__search_documents" "mcp__nexus__list_documents" \
+    --no-session-persistence --output-format stream-json --verbose
+[exit 0, 20 s]
+```
+
+What the stream showed (summarised from the JSON events):
+
+```text
+init: mcp_servers [('nexus', 'connected')], tools mcp__nexus__list_documents, mcp__nexus__search_documents
+tool_use: mcp__nexus__search_documents {"query": "retention period for readings and alert events", "top_k": 5}
+tool_result: ok, 5 excerpts: 01_text_heavy.pdf#5, #6, #9, #10, #12
+result: success, 3 turns, 13.6 s
+ANSWER: Readings are kept for ninety days at full resolution and for two years as hourly averages [01_text_heavy.pdf#9]. Alert events are kept for one year [01_text_heavy.pdf#9].
+```
+
+- Claude Code chose the tool, wrote its own query, and cited the excerpt label: `#9` is the
+  "8. Data retention" chunk.
+- **Afterwards:**
+  - the key was revoked (204), and its next request was 401;
+  - the key appeared 0 times in the API log and in Claude's output;
+  - `~/.claude.json` had no MCP server registered, before or after, and no `.mcp.json` was
+    created.
+- The one stderr line was Claude Code's "no stdin data received in 3s" notice. Add
+  `< /dev/null` to silence it.
+- The headless session runs on the presenter's Claude account; the Nexus app itself still
+  calls no paid API.
+
+**To register it permanently instead** (this edits your Claude Code config, so it wasn't
+done here):
+
+```bash
+# user-wide (in ~/.claude.json):
+claude mcp add nexus --scope user \
+  -e NEXUS_API_URL=http://localhost:8000 -e NEXUS_API_KEY=nxk_... \
+  -- uv run --directory /path/to/nexus-rag python -m app.mcp_server
+# or only for one project, in its .mcp.json (don't commit a real key):
+claude mcp add nexus --scope project -e NEXUS_API_URL=... -e NEXUS_API_KEY=nxk_... -- uv run --directory /path/to/nexus-rag python -m app.mcp_server
+claude mcp list        # check it's connected
+claude mcp remove nexus --scope user   # undo
+```
+
 ## Not shown here
 
-- **The follow-up question with a rewritten query** (`nexus ask ... --conversation ID`, the
-  guide's step 3): not run in this pass, and no real run of it is recorded in the docs.
-  It's covered by integration tests with a fake LLM (`tests/integration/test_conversations.py`;
-  design in ADR-0009). Run it once before relying on it in a live demo. It adds another
-  ~2.5 min answer.
-- **A scanned PDF failing cleanly** ("No extractable text"): also in cli-demo.md.
+- **A scanned PDF failing cleanly** ("No extractable text"): a real run is in
+  [cli-demo.md](cli-demo.md).
+- **The MCP Inspector:** not run (`npx` would download it).
