@@ -40,6 +40,8 @@ fetch-models:
 	uv run python -m app.providers.tokenizer --fetch
 	uv run python -m app.providers.embeddings --fetch
 	uv run python -m app.providers.reranker --fetch
+	# The container reads these as another uid (ADR-0015); the hub writes some files 0600.
+	find data/fastembed_cache -type f ! -perm -o=r -exec chmod a+r {} +
 
 sample-docs:
 	uv run python scripts/make_sample_docs.py

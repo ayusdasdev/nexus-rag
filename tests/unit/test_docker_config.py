@@ -85,3 +85,14 @@ def test_infrastructure_ports_are_published_on_loopback_only() -> None:
     for name in ("postgres", "redis", "qdrant"):
         for port in COMPOSE["services"][name]["ports"]:
             assert str(port).startswith("127.0.0.1:"), (name, port)
+
+
+def test_make_fetch_models_leaves_the_model_cache_readable_by_the_container() -> None:
+    # The hub writes some tree-cache files 0600; the container (uid 10001) then logs
+    # "Permission denied" on its read-only mount (seen again from a fresh clone, 2026-10-13).
+    makefile = (ROOT / "Makefile").read_text()
+    recipe = makefile.split("\nfetch-models:", 1)[1].split("\n\n", 1)[0]
+
+    assert "chmod a+r" in recipe
+    assert "data/fastembed_cache" in recipe
+    assert recipe.rstrip().splitlines()[-1].strip().startswith("find ")
