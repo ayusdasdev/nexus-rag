@@ -693,6 +693,10 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
     ingestion was timed) and HNSW tuning (defaults kept).
   - **STAR story 3** (a disagreement with the agent) lists the decisions on record; your
     reasons aren't in the files, so you tell it.
-- [ ] Item 4: resume bullets, measured numbers only, with dev-only claims marked.
+- [x] Item 4: resume bullets in `docs/interview.md`, following the guide's M11.1 template,
+  measured numbers only.
+  - **Tags:** [dev], [n = ...] and [unverified] on every claim that needs one.
+  - **Plus a "don't claim" list:** a judge faithfulness score, cost accounting, embedding
+    throughput, production traffic, CI on GitHub.
 - [ ] Item 5: final hygiene: secrets scan of the tree and history, untracked `.env` and
   `data/`, a clean tree, open Later items.

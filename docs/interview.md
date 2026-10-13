@@ -9,6 +9,57 @@ bge-reranker-base, Ollama llama3.2:3b), one run each.
 questions. The 12-question hold-out was run once, at the end, for retrieval only. Dev numbers
 are not a fresh estimate (see "What didn't work" and the README).
 
+## Resume bullets (measured numbers only)
+
+Each bullet follows the guide's M11.1 template. Tags after a number:
+- **[dev]:** measured on the 48 dev questions that every choice was also made on;
+- **[n = ...]:** a small sample;
+- **[unverified]:** not checked where the claim would apply.
+
+Don't drop the tags when you're asked about a number.
+
+- Built **Nexus RAG**, a multi-tenant document Q&A API (FastAPI, Postgres, Qdrant, Celery,
+  Redis) with hybrid dense + BM25 retrieval, RRF fusion and cross-encoder reranking.
+  - Raised Recall@5 from 24/41 to 31/41 and MRR from 0.532 to 0.635 over dense-only retrieval
+    on a 60-question labelled set **[dev]**.
+  - On the 12-question hold-out, run once: R@5 9/10, MRR 0.670 **[n = 10]**.
+- Enforced tenant isolation with:
+  - token-derived tenant identity;
+  - a single filtered vector-store gateway, enforced by import-linter contracts;
+  - tenant-scoped Postgres queries and composite foreign keys.
+  - Verified by 26 cross-tenant and IDOR integration tests plus 11 API-key tests. All run in
+    the CI workflow **[CI unverified on GitHub]**.
+- Designed a grounded, streaming (SSE) answer pipeline with server-validated citations, an
+  explicit refusal path and query rewriting for multi-turn chat.
+  - Citations: 40 valid, 0 invalid numeric citations.
+  - Refusals: 4/7 exact correct refusals and 1/41 false refusals **[dev, n = 7 for
+    refusals]**.
+  - Hand-graded: 10/15 answers faithful **[n = 15, one grader]**.
+- Built an evaluation harness (retrieval metrics, deterministic answer checks) and ran
+  controlled experiments on chunk size (3 sizes), fusion, reranking and two grounding
+  prompts, each with a hypothesis and decision rule committed before the run.
+  - Rejected an LLM judge that failed calibration against hand grades: 7/15 agreement vs
+    10/15 for a constant **[n = 15]**.
+  - Documented 16 decisions as ADRs.
+- Exposed retrieval to coding agents as a read-only, tenant-bound MCP server.
+  - Instrumented every answer with a query trace (per-stage latency, candidate ids and scores,
+    model).
+  - Container image and compose profile verified from a fresh clone; CI with lint, unit and
+    integration jobs **[CI unverified on GitHub]**.
+- Developed with Claude Code using:
+  - a committed CLAUDE.md, permission deny rules and three hooks (protected files, format,
+    test gate);
+  - two subagents, a skill and two commands.
+  - The security-review subagent's 6 reviews found 3 high- and 11 medium-severity issues,
+    all fixed with tests first.
+
+**Don't claim:**
+- a faithfulness score from an LLM judge;
+- cost accounting (`est_cost` is null on the free stack);
+- embedding throughput (only end-to-end ingestion was timed: 473 chunks in 350 s);
+- production traffic;
+- CI passing on GitHub.
+
 ## The two-minute pitch
 
 1. **Problem:** LLMs don't know a company's private documents and can't cite them; a SaaS
