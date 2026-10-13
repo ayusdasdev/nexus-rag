@@ -1,6 +1,6 @@
 import socket
-import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -15,6 +15,7 @@ from app.services.generation import (
     parse_citations,
     strip_prompt_scaffolding,
 )
+from tests.timing import assert_linear, repeat
 
 
 def _chunk(text: str, heading_path: str | None = None) -> ContextChunk:
@@ -207,10 +208,13 @@ def test_a_dropped_citation_between_two_words_does_not_fuse_them() -> None:
 
 
 def test_malformed_citation_reporting_is_linear_on_hostile_output() -> None:
-    for text in ("[" * 200_000, "[a]" * 70_000, "[1]x" * 50_000, "`[a]" * 50_000):
-        start = time.perf_counter()
-        parse_citations(text, source_count=2)
-        assert time.perf_counter() - start < 1.0
+    # n and 4n units; 4n is the size each case used with the old 1 s limit.
+    for unit, n in (("[", 50_000), ("[a]", 17_500), ("[1]x", 12_500), ("`[a]", 12_500)):
+        assert_linear(
+            lambda text: parse_citations(text, source_count=2),
+            repeat(unit),
+            n,
+        )
 
 
 # --- find_external_links ----------------------------------------------------------
@@ -332,10 +336,13 @@ def test_messages_are_plain_text_chat_messages() -> None:
 
 def test_parse_citations_is_linear_on_huge_whitespace_runs() -> None:
     # Was quadratic: 40k spaces took ~9 s and blocked the event loop.
-    for text in (" " * 200_000 + "[1]", "[1" + " " * 200_000, "\n" * 200_000 + "[9]"):
-        start = time.perf_counter()
-        parse_citations(text, source_count=2)
-        assert time.perf_counter() - start < 1.0
+    cases: list[Callable[[int], str]] = [
+        lambda n: " " * n + "[1]",
+        lambda n: "[1" + " " * n,
+        lambda n: "\n" * n + "[9]",
+    ]
+    for make in cases:
+        assert_linear(lambda text: parse_citations(text, source_count=2), make, 50_000)
 
 
 def test_a_citation_with_thousands_of_digits_is_plain_text_not_an_error() -> None:
@@ -441,10 +448,13 @@ def test_strip_prompt_scaffolding_keeps_other_angle_bracket_text() -> None:
 
 
 def test_strip_prompt_scaffolding_is_linear_on_hostile_output() -> None:
-    for text in ("<" * 200_000, "<document" * 50_000, "\n" * 200_000 + "<question>"):
-        start = time.perf_counter()
-        strip_prompt_scaffolding(text)
-        assert time.perf_counter() - start < 1.0
+    cases: list[tuple[Callable[[int], str], int]] = [
+        (lambda n: "<" * n, 50_000),
+        (lambda n: "<document" * n, 12_500),
+        (lambda n: "\n" * n + "<question>", 50_000),
+    ]
+    for make, n in cases:
+        assert_linear(strip_prompt_scaffolding, make, n)
 
 
 # Leftover wrappers seen in the M8 E3-gen run (llama3.2:3b): q034/q049 wrapped the whole
@@ -510,10 +520,8 @@ def test_similar_names_and_other_angle_text_are_kept() -> None:
 
 
 def test_leftover_wrapper_stripping_is_linear_on_hostile_output() -> None:
-    for text in ("`" * 200_000, "` " * 100_000, "<answer" * 30_000, "</p" * 60_000):
-        start = time.perf_counter()
-        strip_prompt_scaffolding(text)
-        assert time.perf_counter() - start < 1.0
+    for unit, n in (("`", 50_000), ("` ", 25_000), ("<answer", 7_500), ("</p", 15_000)):
+        assert_linear(strip_prompt_scaffolding, repeat(unit), n)
 
 
 # --- history (M6, ADR-0009) -------------------------------------------------------

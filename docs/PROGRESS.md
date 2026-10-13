@@ -643,7 +643,26 @@ with read-only, tenant-bound API keys.
 
 ## M11: Packaging
 
-- [ ] `docs/interview/`: resume bullets (only measured numbers, TODO otherwise), two-minute
-  pitch, five-minute demo script, whiteboard notes, scale-up numbers. Question banks and STAR
-  stories are outlines; you rehearse them.
-- [ ] Final check: README and demo work from a fresh clone.
+Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md` and
+`docs/interview.md`, delivered one item at a time.
+
+- **A load-sensitive timing test** (2026-10-13). Before the README commit, `make test`
+  failed once: `test_the_near_refusal_check_is_linear_on_hostile_output` took 1.09 s against
+  its absolute 1.0 s limit, with the whole machine about 2x slower (unit suite 62-69 s, about
+  30 s the day before). The same suite, unchanged, then passed (730 passed); log
+  `~/nexus-rag-test-logs/2026-10-13-test-m11b.out`.
+  - **Fix:** all five hostile-input tests with an absolute wall-clock limit now use
+    `tests/timing.assert_linear`. It times n vs 4n (4n is the old input size), best of 5,
+    with batches of at least 20 ms, and fails at a ratio of 10 or more (linear is about
+    4, quadratic about 16).
+  - **Not weakened, measured:** each of the five fails against a deliberately quadratic
+    version of its function (13.6x-16.9x), and `tests/unit/test_timing.py` keeps a
+    quadratic case in the suite (17.6x vs 4.1x for a linear one).
+  - **Cost:** about 20 s more unit-test time.
+- [ ] Item 1: README polish (Mermaid diagram rendered and checked; quickstart from a fresh
+  clone; results with raw counts; limits).
+- [ ] Item 2: `docs/demo.md`, a 5-minute demo with every step run once.
+- [ ] Item 3: `docs/interview.md`, talking points, Q&A, and what didn't work.
+- [ ] Item 4: resume bullets, measured numbers only, with dev-only claims marked.
+- [ ] Item 5: final hygiene: secrets scan of the tree and history, untracked `.env` and
+  `data/`, a clean tree, open Later items.

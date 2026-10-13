@@ -22,6 +22,7 @@ from eval.judge import (
     parse_verdict,
     refusal_check,
 )
+from tests.timing import assert_linear, repeat
 
 SPLIT = json.loads((DATASETS / "v1.split.json").read_text())
 
@@ -356,9 +357,13 @@ def test_a_citation_number_is_not_a_found_fact() -> None:
 
 
 def test_the_near_refusal_check_is_linear_on_hostile_output() -> None:
-    import time
-
-    for text in ("not stated " * 40_000, "no mention" * 40_000, "documents " * 50_000):
-        start = time.perf_counter()
-        refusal_check(_rec(answerable=False, answer=text))
-        assert time.perf_counter() - start < 1.0
+    for unit, n in (
+        ("not stated ", 10_000),
+        ("no mention", 10_000),
+        ("documents ", 12_500),
+    ):
+        assert_linear(
+            lambda text: refusal_check(_rec(answerable=False, answer=text)),
+            repeat(unit),
+            n,
+        )
