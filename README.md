@@ -13,25 +13,48 @@ conversations with query rewriting.
 
 ## Architecture
 
-```text
- clients: nexus CLI, curl, MCP server (read-only key)
-                     |  HTTPS / bearer token or API key
-                     v
- FastAPI app/api/  -- thin routers: auth, rate limits, problem+json, request ids, SSE
-        |
-        v
- app/services/     -- retrieval (dense + sparse -> RRF -> rerank), chat and citations,
-        |             conversations and rewriting, query traces
-        v
- app/repositories/ -- the only place for SQL and Qdrant; every call scoped by tenant
-     |        |
- Postgres   Qdrant (one collection, a tenant filter on every query)
-     ^
- Celery worker (Redis broker): parse -> chunk (350 tokens) -> embed -> upsert
- app/providers/    -- embeddings, reranker and LLM behind Protocols (fakes in tests)
+```mermaid
+flowchart TB
+    clients["Clients: nexus CLI, curl,<br/>MCP server (read-only API key)"]
+    api["FastAPI routers (app/api)<br/>auth: tenant from the verified token<br/>rate limits, request ids, SSE"]
+    clients -- "bearer JWT or API key" --> api
+
+    subgraph ingest["Ingestion path (async)"]
+        upload["POST /v1/documents<br/>sniff type, cap size, store file"]
+        worker["Celery worker<br/>parse, chunk 350/50 tokens,<br/>embed BGE + BM25"]
+        upload -- "task via Redis" --> worker
+    end
+
+    subgraph query["Query path"]
+        retrieve["Retrieval (app/services)<br/>dense top 40 + BM25 top 40<br/>RRF fusion,<br/>cross-encoder rerank of top 50"]
+        generate["Generation<br/>prompt with document tags,<br/>stream answer, validate citations,<br/>save messages + query trace"]
+        retrieve --> generate
+    end
+
+    api --> upload
+    api --> retrieve
+
+    subgraph repos["app/repositories"]
+        pg[("Postgres, every query tenant-scoped<br/>tenants, users, documents,<br/>chunks text, conversations,<br/>API keys, query traces")]
+        qd[("Qdrant<br/>one collection,<br/>dense + sparse vectors,<br/>tenant filter on every call")]
+    end
+    redis[("Redis<br/>Celery broker,<br/>rate-limit buckets")]
+
+    worker --> pg
+    worker --> qd
+    retrieve --> qd
+    retrieve -- "hydrate chunk text" --> pg
+    generate --> pg
+    api -. "token buckets" .-> redis
+
+    providers["app/providers: embeddings, reranker, LLM behind Protocols<br/>local: fastembed + Ollama llama3.2:3b; fakes in tests"]
+    worker -.-> providers
+    retrieve -.-> providers
+    generate -.-> providers
 ```
 
-- Layer rules are enforced by `.importlinter`, run by `make lint`.
+- Layer rules are enforced by `.importlinter`, run by `make lint`: routers in `app/api`,
+  logic in `app/services`, and all SQL and Qdrant calls in `app/repositories`.
 - The tenant always comes from the verified token, never from a request
   ([security.md](docs/security.md)).
 
@@ -49,15 +72,31 @@ make dev                    # API on http://localhost:8000 (OpenAPI at /docs)
 make worker                 # in another terminal: ingestion
 ```
 
+The first `uv run` (inside `make fetch-models`) creates `.venv` from `uv.lock`; no separate
+install step is needed. `make fetch-models` also makes the model cache readable by the
+container user (some hub files are written 0600).
+
 **Or run the app in containers** (ADR-0015):
 - `make app-up` builds the image and starts `migrate`, `api` and `worker` against the same
   infrastructure, with the model caches mounted read-only. `make app-down` stops only those.
-- Verified in this repo on 2026-10-12. TODO: not yet verified from a fresh clone.
+- **Verified from a fresh clone** on 2026-10-13: `git clone` of `0a747da` into an empty
+  directory, with no `.env`, `data/` or `.venv`, and an empty Hugging Face cache.
+  - **Steps and times:** `cp .env.example .env`; `make up` (4 s); `make fetch-models` (484 s,
+    real downloads, 1.3 GB); `make migrate` (6 s).
+  - **Local path** (`make dev` + `make worker` + the CLI): health OK in 9 s; signup 201;
+    upload `05_README.md` ready in 7.4 s; search 27 s (reranked, uncached).
+  - **Container path** (`make app-up`, 137 s including the image build): a PDF ingested by
+    the containerised worker was ready in 26 s, and search found the right chunk.
+  - **Caveats:** the Docker base images and uv's package cache were already on this machine,
+    so `make up` and the venv install (0.7 s) were faster than on a new machine.
+  - **One fix:** that run found a "Permission denied" warning (0600 cache files) on the
+    container's model mount. `make fetch-models` now fixes the modes, verified in the same
+    clone.
 
 **Tests:**
 - `make lint` (ruff, mypy --strict, import contracts);
-- `make test` (695 unit tests, fakes only);
-- `make test-int` (411 integration tests against the local services).
+- `make test` (732 unit tests, fakes only);
+- `make test-int` (413 integration tests against the local services).
 
 ## A 60-second demo (CLI)
 
@@ -92,7 +131,7 @@ An admin can fetch it with `GET /v1/traces/{X-Request-ID}`. Users rate their ans
 `POST /v1/messages/{id}/feedback`. Logs are JSON lines with `request_id` and `tenant_id`
 ([ADR-0013](docs/decisions/0013-observability-logs-and-query-traces.md)).
 
-## Evaluation (M8): measured results
+## Evaluation (M8, M10): measured results
 
 All numbers come from `eval/runs/*` (committed) and are one run each on one corpus. Details,
 hypotheses written before each run, and every caveat are in
@@ -139,6 +178,19 @@ deterministic checks:
   limitation: references can hold facts the question doesn't ask about.
 - **Speed:** 0 errors; generation median 120 s per answer (max 230 s), first token median
   107 s.
+
+**M10 experiments** (dev only, each with its hypothesis and decision rule committed before
+the run; all kept off, so the defaults above are unchanged):
+
+| experiment | the key numbers | decision |
+|---|---|---|
+| Weighted RRF, dense 1.5 or 2.0 (`RRF_DENSE_WEIGHT`) | E3 R@5 31 -> 32/41, R@10 34 -> 35/41, MRR 0.635 -> 0.639 (2 questions moved) | off: the rule needed +2 questions |
+| Quote-then-cite prompt (`ANSWER_STYLE=quote_then_cite`) | cites gold 15/40 -> 21/41, uncited 6 -> 0; exact refusals 4/7 -> **0/7** | off: refusals broke |
+| Refusal-first quote prompt (`quote_refusal_first`) | exact refusals 5/7; but 26/39 answers are a bare quote, false refusals 1 -> 2, cites gold 18/39 | off: failed 2 of 4 conditions ([ADR-0016](docs/decisions/0016-answer-prompt-stays-cite.md)) |
+
+All three were measured on the same 48 dev questions that every earlier choice used; n = 7
+for refusals (one question is 14 points). They are dev evidence, not a final check, which
+would need a fresh labelled set (dataset v2, deferred).
 
 **LLM judge: failed calibration, not used**
 ([ADR-0011](docs/decisions/0011-llm-judge-failed-calibration.md)). The one-call
@@ -189,6 +241,7 @@ llama3.2:3b judge was compared with 15 hand grades:
 | [0013](docs/decisions/0013-observability-logs-and-query-traces.md) | JSON logs, request traces and query traces |
 | [0014](docs/decisions/0014-mcp-server-and-read-only-api-keys.md) | the MCP server and read-only API keys |
 | [0015](docs/decisions/0015-container-image-and-compose-profile.md) | the container image and compose profile |
+| [0016](docs/decisions/0016-answer-prompt-stays-cite.md) | the answer prompt stays `cite`; quote styles kept as settings |
 
 Dependencies and why each was added: [dependencies.md](docs/decisions/dependencies.md).
 
@@ -214,9 +267,16 @@ that proves it, and the known gaps.
 - **Answer quality:** measured only by deterministic checks and 15 hand grades; the small
   LLM judge failed calibration.
 - **Hold-out:** 12 questions, so it can only show the configuration didn't collapse.
-- **Most common failure** (failure analysis): the answer model cites the wrong source while
-  the right one is in the prompt
-  ([failure-analysis.md](docs/decisions/failure-analysis.md)).
+- **Most common failure** (failure analysis): context use, in 14 of 26 failing dev
+  questions. The gold source was in the prompt, but the answer ignored or misread it; in 8
+  of the 14 it cited a different source
+  ([failure-analysis.md](docs/decisions/failure-analysis.md)). Two prompt fixes were tried
+  in M10. Neither passed its rule with llama3.2:3b: quoting improved grounding but broke
+  refusals, or left bare quotes.
+- **Dev reuse:** every choice was made on the same 48 dev questions, and the 12-question
+  hold-out is spent. The numbers above are not a fresh estimate.
+- **Not built:** document-level ACLs, a scheduled trace purge, a per-tenant API-key cap, and
+  the eval API. The deferred items are listed in [PROGRESS.md](docs/PROGRESS.md) (Later).
 - **CI** (`.github/workflows/ci.yml`: lint, unit, integration) is **unverified on GitHub**.
   A clean local simulation of its steps passed.
 - **Clock steps:** the dev machine's clock steps backwards. Message and conversation order

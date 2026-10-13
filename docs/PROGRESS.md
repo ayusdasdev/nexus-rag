@@ -659,8 +659,22 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
     version of its function (13.6x-16.9x), and `tests/unit/test_timing.py` keeps a
     quadratic case in the suite (17.6x vs 4.1x for a linear one).
   - **Cost:** about 20 s more unit-test time.
-- [ ] Item 1: README polish (Mermaid diagram rendered and checked; quickstart from a fresh
-  clone; results with raw counts; limits).
+- [x] Item 1: README polish.
+  - **Mermaid diagram,** render-checked with the mermaid-cli 11.4.2 container image (the
+    npx Chromium needs `libnss3`, which WSL lacks and you didn't approve installing).
+    Re-rendered until no title was clipped.
+  - **Quickstart verified from a fresh clone** of `0a747da` (no `.env`, `data/`, `.venv`,
+    empty HF cache):
+    - steps: `make up` 4 s (images cached), `make fetch-models` 484 s (real 1.3 GB),
+      `make migrate` 6 s;
+    - local path: signup 201, upload ready in 7.4 s, search 27 s;
+    - containers: `make app-up` 137 s; a PDF ready in 26 s, search found the right chunk.
+  - **Bug found by the clone:** 0600 cache files gave "Permission denied" in the container;
+    `fetch-models` now fixes the modes (`1ee06cb`, tests first).
+  - **Cleanup:** the clone's three volumes deleted with your approval. The main stack's eval
+    tenants are intact: 473/664/424 chunks in both Postgres and Qdrant.
+  - **Content:** M10 results with raw counts and the dev-only caveat, ADR-0016, updated
+    limits, and current test counts.
 - [ ] Item 2: `docs/demo.md`, a 5-minute demo with every step run once.
 - [ ] Item 3: `docs/interview.md`, talking points, Q&A, and what didn't work.
 - [ ] Item 4: resume bullets, measured numbers only, with dev-only claims marked.
