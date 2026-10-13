@@ -30,6 +30,8 @@ htmlcov/
 
 # Alembic (keep migration scripts, ignore local sqlite artifacts if any)
 *.sqlite3
+*.sqlite
+*.db
 
 # OS
 .DS_Store
