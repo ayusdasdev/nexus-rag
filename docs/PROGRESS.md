@@ -685,7 +685,14 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
     measured 6/40 weakness.
   - **Not run:** the follow-up with a rewritten query (no real run is recorded; it's covered
     by integration tests) and Claude Code registration.
-- [ ] Item 3: `docs/interview.md`, talking points, Q&A, and what didn't work.
+- [x] Item 3: `docs/interview.md`.
+  - **Contents:** the pitch, whiteboard notes, numbers with raw counts and source files,
+    scale-up arithmetic, answers to all 25 RAG and 15 Claude Code questions from this
+    project, three STAR outlines, and "What didn't work".
+  - **Not measured, so stated as such:** embedding throughput alone (only end-to-end
+    ingestion was timed) and HNSW tuning (defaults kept).
+  - **STAR story 3** (a disagreement with the agent) lists the decisions on record; your
+    reasons aren't in the files, so you tell it.
 - [ ] Item 4: resume bullets, measured numbers only, with dev-only claims marked.
 - [ ] Item 5: final hygiene: secrets scan of the tree and history, untracked `.env` and
   `data/`, a clean tree, open Later items.
