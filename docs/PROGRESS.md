@@ -753,3 +753,23 @@ Your plan (2026-10-13) replaces the `docs/interview/` folder with `docs/demo.md`
   - `~/.claude.json` had no MCP server registered, before or after.
 - **Still not run:** a permanent `claude mcp add` (it edits your config; exact commands are in
   `docs/demo.md` step 8) and the MCP Inspector.
+
+**Publishing prep (2026-10-13; no remote created, nothing pushed):**
+- **Never tracked, checked across all 227 commits:** `.env` (only `.env.example`, with local
+  defaults), `data/`, `eval/state/`, model weights, `*.sqlite`. `*.sqlite` and `*.db` are now
+  ignored too.
+- **Personal data:**
+  - one absolute path, `/home/<user>/...` in `eval/runs/E3-holdout/run.json` (added in
+    `db91b3a`), was made repo-relative. A unit test now fails on any absolute path in a
+    committed `run.json`. The old value stays in history (no rewrite, your choice).
+  - Every commit's author email is the personal one; kept in history (your choice). Set a
+    GitHub noreply address for new commits.
+  - Everything else found was harmless: example emails, `/mnt/c/...` inside corpus text, WSL
+    mentions.
+- **`docs/guide.pdf`:** no longer tracked (your choice). It stays on disk and in history; the
+  frozen eval corpus copy `eval/corpus/guide.pdf` stays.
+- **Licence:** AGPL-3.0-or-later (your choice): `LICENSE`, `pyproject.toml`, README,
+  ADR-0017.
+- **Interview bullets:** Recall@5 now gives the mean and the count, API-key tests are counted
+  the same way as isolation tests (21 collected, not 11 functions), and the citation line
+  carries its caveats (uncited, gold, malformed).
