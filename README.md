@@ -244,6 +244,7 @@ llama3.2:3b judge was compared with 15 hand grades:
 | [0014](docs/decisions/0014-mcp-server-and-read-only-api-keys.md) | the MCP server and read-only API keys |
 | [0015](docs/decisions/0015-container-image-and-compose-profile.md) | the container image and compose profile |
 | [0016](docs/decisions/0016-answer-prompt-stays-cite.md) | the answer prompt stays `cite`; quote styles kept as settings |
+| [0017](docs/decisions/0017-project-licence-agpl.md) | the project is licensed AGPL-3.0-or-later |
 
 Dependencies and why each was added: [dependencies.md](docs/decisions/dependencies.md).
 
@@ -286,7 +287,14 @@ that proves it, and the known gaps.
 
 ## Licence
 
-This project uses `pymupdf4llm`, which depends on PyMuPDF licensed under AGPL-3.0. Anyone who
-interacts with a modified version of this service over a network must be offered its source
-code. See [ADR-0001](docs/decisions/0001-pdf-parser-agpl-licence.md) for the decision and its
-revisit conditions.
+Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE)
+(AGPL-3.0-or-later); see [ADR-0017](docs/decisions/0017-project-licence-agpl.md).
+
+- **Why AGPL:** PDF parsing uses `pymupdf4llm`, which depends on PyMuPDF, licensed under
+  AGPL-3.0 ([ADR-0001](docs/decisions/0001-pdf-parser-agpl-licence.md)). Any distributed or
+  hosted form of this service is bound by the AGPL either way, so the project uses the same
+  licence.
+- **What it means:** anyone who interacts with a modified version of this service over a
+  network must be offered its source code (AGPL section 13).
+- **Other dependencies** keep their own licences. [dependencies.md](docs/decisions/dependencies.md)
+  records why each was added, and the licence only for some of them.

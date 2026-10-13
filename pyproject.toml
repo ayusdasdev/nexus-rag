@@ -2,6 +2,7 @@
 name = "nexus-rag"
 version = "0.1.0"
 description = "Multi-tenant document Q&A API (RAG)"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.20.0",
